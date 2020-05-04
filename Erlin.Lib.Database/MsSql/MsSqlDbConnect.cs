@@ -8,6 +8,7 @@ using System.Linq;
 
 using Erlin.Lib.Common;
 using Erlin.Lib.Common.Exceptions;
+using Erlin.Lib.Database.MsSql.Schema;
 using Erlin.Lib.Database.Schema;
 
 using Microsoft.Data.SqlClient;
@@ -82,59 +83,17 @@ namespace Erlin.Lib.Database.MsSql
         {
             SqlConnectionStringBuilder connStringBuilder = new SqlConnectionStringBuilder(_connectionString);
 
-            const string SQL = @"
-SELECT so.id AS ObjectId, sch.name as SchemaName, so.name AS ObjectName, so.[type] AS ObjectType, sc.[text] AS [Text],
-CAST( 
-case 
-    when ( select major_id from sys.extended_properties
-			where major_id = so.id AND minor_id = 0 AND class = 1 AND name = N'microsoft_database_tools_support'
-		 ) is not null then 1
-    else 0
-end AS bit) AS [IsSystemObject]
-
-FROM sys.sysobjects so WITH(NOLOCK)
-JOIN sys.syscomments sc WITH(NOLOCK) ON so.id = sc.id
-JOIN sys.schemas sch WITH(NOLOCK) ON so.[uid] = sch.[schema_id] AND sch.name != 'sys'
-ORDER BY so.name
-
-SELECT d.name as SchemaName, b.name as ObjectName, a.name as ParamName, c.name as TypeName, a.[prec] AS TypeLength, a.xprec AS TypePrecision, a.xscale AS TypeScale, a.isnullable AS IsNullable, b.[type] AS ObjectType, a.colid AS ColumnId, a.cdefault AS ColumndDefaultObjectId,a.[collation] AS [Collation],
-CAST( 
-case 
-	when t.is_ms_shipped = 1 then 1
-    when ( select major_id from sys.extended_properties
-			where major_id = t.object_id AND minor_id = 0 AND class = 1 AND name = N'microsoft_database_tools_support'
-		 ) is not null then 1
-	when ( select major_id from sys.extended_properties
-			where major_id = a.id AND minor_id = 0 AND class = 1 AND name = N'microsoft_database_tools_support'
-		 ) is not null then 1
-    else 0
-end AS bit) AS [IsSystemObject]
-
-FROM syscolumns a WITH(NOLOCK)
-JOIN sysobjects b WITH(NOLOCK) ON a.id = b.id
-JOIN systypes c WITH(NOLOCK) ON a.xtype = c.xtype AND c.xtype=c.xusertype
-JOIN sys.schemas d WITH(NOLOCK) ON b.[uid] = d.[schema_id] AND d.name != 'sys'
-LEFT JOIN sys.tables t ON b.id = t.object_id
-ORDER BY SchemaName, ObjectName, ParamName
-";
-
-            DataSet data = GetDataSetImpl(SQL, CommandType.Text, null);
-            if (data.Tables.Count != 2)
+            string sqlQuery = MsSqlDbObjectParam.SelectQuery + MsSqlDbObjectText.SelectQuery;
+            MsSqlDataReader reader = GetDataReaderImpl(sqlQuery, CommandType.Text, null);
+            List<MsSqlDbObjectParam> prms = reader.ReadList<MsSqlDbObjectParam>();
+            if (!reader.NextResult())
             {
-                throw new InvalidDataException("Cannot get database schema - query returned unexpected numbers of table results!");
+                throw new InvalidOperationException("Expected at least two result sets!");
             }
 
-            DbObjectCatalogSchema result = new DbObjectCatalogSchema(connStringBuilder.InitialCatalog, connStringBuilder.DataSource);
+            List<MsSqlDbObjectText> texts = reader.ReadList<MsSqlDbObjectText>();
 
-            DataTable textTable = data.Tables[0];
-            DataTable paramTable = data.Tables[1];
-
-            Dictionary<long, string> defaultValues = new Dictionary<long, string>();
-
-            ReadScriptedObjects(textTable, defaultValues, result);
-            ReadParamObjects(paramTable, defaultValues, result);
-
-            return result;
+            return new DbObjectCatalogSchema();
         }
 
         /// <summary>
@@ -483,7 +442,7 @@ ORDER BY SchemaName, ObjectName, ParamName
         }
 
         [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification = "DataSet should not be IDisposable.")]
-        private MsSqlDataReader GetDataReaderImpl(string commandText, CommandType commandType, List<SqlParam> prms)
+        private MsSqlDataReader GetDataReaderImpl(string commandText, CommandType commandType, List<SqlParam>? prms)
         {
             SqlCommand command = CreateSqlCommand(commandText, commandType, prms);
             return new MsSqlDataReader(command.ExecuteReader());
