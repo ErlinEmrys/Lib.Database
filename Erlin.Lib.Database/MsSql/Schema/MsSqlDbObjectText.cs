@@ -15,15 +15,21 @@ namespace Erlin.Lib.Database.MsSql.Schema
         /// Query for select query texts from db
         /// </summary>
         public static string SelectQuery { get; } = @$"
-SELECT sch.name as {nameof(SchemaName)},
-        so.name as {nameof(ObjectName)},
-        so.[type] AS {nameof(ObjectType)},
+SELECT sch.name as [{nameof(SchemaName)}],
+        so.name as [{nameof(ObjectName)}],
+        so.[type] AS [{nameof(ObjectType)}],
+        sc.[colid] AS [{nameof(OrderId)}],
         sc.[text] AS [{nameof(Text)}]
 FROM sys.sysobjects so WITH(NOLOCK)
 JOIN sys.syscomments sc WITH(NOLOCK) ON so.id = sc.id
 JOIN sys.schemas sch WITH(NOLOCK) ON so.[uid] = sch.[schema_id] AND sch.name != 'sys'
-ORDER BY {nameof(SchemaName)}, {nameof(ObjectName)}
+ORDER BY [{nameof(SchemaName)}], [{nameof(ObjectName)}]
 ";
+
+        /// <summary>
+        /// Order id of this parameter
+        /// </summary>
+        public short OrderId { get; protected set; }
 
         /// <summary>
         /// Query text
@@ -46,6 +52,7 @@ ORDER BY {nameof(SchemaName)}, {nameof(ObjectName)}
         {
             base.DbRead(reader);
 
+            OrderId = reader.ReadInt16(nameof(OrderId));
             Text = reader.ReadString(nameof(Text));
         }
     }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 
 using Erlin.Lib.Database.MsSql;
+using Erlin.Lib.Database.MsSql.Schema;
 using Erlin.Lib.Database.Schema;
 
 namespace Erlin.Lib.Database
@@ -22,7 +23,7 @@ namespace Erlin.Lib.Database
             using (MsSqlDbConnect connect = new MsSqlDbConnect(connString))
             {
                 connect.Open();
-                DbObjectCatalogSchema dbSchema = connect.ReadSchema();
+                MsSqlDbSchema dbSchema = connect.ReadSchema();
             }
         }
     }

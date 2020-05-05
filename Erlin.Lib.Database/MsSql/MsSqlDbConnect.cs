@@ -79,7 +79,7 @@ namespace Erlin.Lib.Database.MsSql
         /// Read complete databae schema
         /// </summary>
         /// <returns>Parsed database schema</returns>
-        public DbObjectCatalogSchema ReadSchema()
+        public MsSqlDbSchema ReadSchema()
         {
             SqlConnectionStringBuilder connStringBuilder = new SqlConnectionStringBuilder(_connectionString);
 
@@ -93,7 +93,7 @@ namespace Erlin.Lib.Database.MsSql
 
             List<MsSqlDbObjectText> texts = reader.ReadList<MsSqlDbObjectText>();
 
-            return new DbObjectCatalogSchema();
+            return new MsSqlDbSchema();
         }
 
         /// <summary>

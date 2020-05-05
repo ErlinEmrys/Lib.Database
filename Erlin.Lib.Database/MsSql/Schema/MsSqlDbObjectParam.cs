@@ -16,22 +16,22 @@ namespace Erlin.Lib.Database.MsSql.Schema
         /// Query for select params from db
         /// </summary>
         public static string SelectQuery { get; } = @$"
-SELECT d.name as {nameof(SchemaName)},
-        b.name as {nameof(ObjectName)},
-        b.[type] AS {nameof(ObjectType)},
-        a.name as {nameof(ParamName)},
-        c.name as {nameof(TypeName)},
-        a.[prec] AS {nameof(TypeLength)},
-        a.xprec AS {nameof(TypePrecision)},
-        a.isnullable AS {nameof(IsNullable)},
-        a.colid AS {nameof(OrderId)},
+SELECT d.name as [{nameof(SchemaName)}],
+        b.name as [{nameof(ObjectName)}],
+        b.[type] AS [{nameof(ObjectType)}],
+        a.name as [{nameof(ParamName)}],
+        c.name as [{nameof(TypeName)}],
+        a.[prec] AS [{nameof(TypeLength)}],
+        a.xprec AS [{nameof(TypePrecision)}],
+        a.isnullable AS [{nameof(IsNullable)}],
+        a.colid AS [{nameof(OrderId)}],
         a.[collation] AS [{nameof(Collation)}]
 FROM syscolumns a WITH(NOLOCK)
 JOIN sysobjects b WITH(NOLOCK) ON a.id = b.id
 JOIN systypes c WITH(NOLOCK) ON a.xtype = c.xtype AND c.xtype=c.xusertype
 JOIN sys.schemas d WITH(NOLOCK) ON b.[uid] = d.[schema_id] AND d.name != 'sys'
 LEFT JOIN sys.tables t ON b.id = t.object_id
-ORDER BY {nameof(SchemaName)}, {nameof(ObjectName)}, {nameof(ParamName)}
+ORDER BY [{nameof(SchemaName)}], [{nameof(ObjectName)}], [{nameof(ParamName)}]
 ";
         /// <summary>
         /// Name of database parameter

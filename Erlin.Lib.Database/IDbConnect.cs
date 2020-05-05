@@ -25,12 +25,6 @@ namespace Erlin.Lib.Database
         void Close();
 
         /// <summary>
-        /// Read complete database schema
-        /// </summary>
-        /// <returns>Parsed database schema</returns>
-        DbObjectCatalogSchema ReadSchema();
-
-        /// <summary>
         /// Returns dataset from SQL query
         /// </summary>
         /// <param name="query">SQL query</param>
