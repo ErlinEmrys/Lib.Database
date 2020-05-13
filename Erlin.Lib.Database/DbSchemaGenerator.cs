@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 
+using Erlin.Lib.Common.FileSystem;
 using Erlin.Lib.Database.MsSql;
 using Erlin.Lib.Database.MsSql.Schema;
 using Erlin.Lib.Database.Schema;
@@ -24,6 +26,8 @@ namespace Erlin.Lib.Database
             {
                 connect.Open();
                 MsSqlDbSchema dbSchema = connect.ReadSchema();
+                StringBuilder createScript = dbSchema.GenerateCreateScript();
+                FileHelper.WriteAllText(outputFilePath, createScript.ToString());
             }
         }
     }

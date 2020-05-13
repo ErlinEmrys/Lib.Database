@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Text;
 
 using Erlin.Lib.Common;
@@ -20,7 +21,7 @@ SELECT d.name as [{nameof(SchemaName)}],
         b.name as [{nameof(ObjectName)}],
         b.[type] AS [{nameof(ObjectType)}],
         a.name as [{nameof(ParamName)}],
-        c.name as [{nameof(TypeName)}],
+        c.name as [{nameof(ParamType)}],
         a.[prec] AS [{nameof(TypeLength)}],
         a.xprec AS [{nameof(TypePrecision)}],
         a.isnullable AS [{nameof(IsNullable)}],
@@ -39,9 +40,9 @@ ORDER BY [{nameof(SchemaName)}], [{nameof(ObjectName)}], [{nameof(ParamName)}]
         public string ParamName { get; protected set; }
 
         /// <summary>
-        /// Name of database parameter type
+        /// Database parameter type
         /// </summary>
-        public string TypeName { get; protected set; }
+        public SqlDbType ParamType { get; protected set; }
 
         /// <summary>
         /// Database parameter type length
@@ -74,7 +75,6 @@ ORDER BY [{nameof(SchemaName)}], [{nameof(ObjectName)}], [{nameof(ParamName)}]
         public MsSqlDbObjectParam()
         {
             ParamName  = IDeSerializable.DUMMY_STRING;
-            TypeName   = IDeSerializable.DUMMY_STRING;
         }
 
         /// <summary>
@@ -86,7 +86,7 @@ ORDER BY [{nameof(SchemaName)}], [{nameof(ObjectName)}], [{nameof(ParamName)}]
             base.DbRead(reader);
 
             ParamName     = reader.ReadString(nameof(ParamName));
-            TypeName      = reader.ReadString(nameof(TypeName));
+            ParamType      = SimpleConvert.Convert<SqlDbType>(reader.ReadString(nameof(ParamType)));
             TypeLength    = reader.ReadInt16(nameof(TypeLength));
             TypePrecision = reader.ReadByte(nameof(TypePrecision));
             IsNullable    = SimpleConvert.Convert<bool>(reader.ReadInt32(nameof(IsNullable)));

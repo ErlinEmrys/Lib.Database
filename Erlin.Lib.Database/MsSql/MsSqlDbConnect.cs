@@ -82,18 +82,9 @@ namespace Erlin.Lib.Database.MsSql
         public MsSqlDbSchema ReadSchema()
         {
             SqlConnectionStringBuilder connStringBuilder = new SqlConnectionStringBuilder(_connectionString);
-
-            string sqlQuery = MsSqlDbObjectParam.SelectQuery + MsSqlDbObjectText.SelectQuery;
-            MsSqlDataReader reader = GetDataReaderImpl(sqlQuery, CommandType.Text, null);
-            List<MsSqlDbObjectParam> prms = reader.ReadList<MsSqlDbObjectParam>();
-            if (!reader.NextResult())
-            {
-                throw new InvalidOperationException("Expected at least two result sets!");
-            }
-
-            List<MsSqlDbObjectText> texts = reader.ReadList<MsSqlDbObjectText>();
-
-            return new MsSqlDbSchema();
+            MsSqlDbSchema result = new MsSqlDbSchema(connStringBuilder.DataSource, connStringBuilder.InitialCatalog);
+            result.ReadSchema(this);
+            return result;
         }
 
         /// <summary>
@@ -431,12 +422,23 @@ namespace Erlin.Lib.Database.MsSql
         }
 
         /// <summary>
-        /// Returns dataset from SQL stored procedure
+        /// Returns reader from SQL query
+        /// </summary>
+        /// <param name="query">SQL query</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Reader</returns>
+        public MsSqlDataReader GetDataReader(string query, List<SqlParam>? prms)
+        {
+            return GetDataReaderImpl(query, CommandType.Text, prms);
+        }
+
+        /// <summary>
+        /// Returns reader from SQL stored procedure
         /// </summary>
         /// <param name="sp">SQL stored procedure</param>
         /// <param name="prms">SQL parameters</param>
-        /// <returns>Dataset</returns>
-        public MsSqlDataReader GetDataReaderSp(string sp, List<SqlParam> prms)
+        /// <returns>reader</returns>
+        public MsSqlDataReader GetDataReaderSp(string sp, List<SqlParam>? prms)
         {
             return GetDataReaderImpl(sp, CommandType.StoredProcedure, prms);
         }
