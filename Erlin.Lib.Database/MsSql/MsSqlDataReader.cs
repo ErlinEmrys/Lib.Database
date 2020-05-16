@@ -27,12 +27,21 @@ namespace Erlin.Lib.Database.MsSql
         }
 
         /// <summary>
+        /// Advances the data reader to the next result, when reading the results of batch Transact-SQL statements.
+        /// </summary>
+        /// <returns><see langword="true" /> if there are more result sets; otherwise <see langword="false" />.</returns>
+        public bool NextResult()
+        {
+            return UnderlyingReader.NextResult();
+        }
+
+        /// <summary>
         /// Reads record from DB
         /// </summary>
         /// <typeparam name="T">Runtime type of record</typeparam>
         /// <returns>Readed record or null</returns>
         public T? Read<T>()
-            where T : class?, IDbReadable, new()
+            where T : class, IDbReadable, new()
         {
             T? item = null;
             if (UnderlyingReader.Read())
@@ -73,7 +82,90 @@ namespace Erlin.Lib.Database.MsSql
         /// <returns>Readed value</returns>
         public string ReadString(string fieldName)
         {
+            string? readed = ReadStringN(fieldName);
+            if (readed == null)
+            {
+                throw new NullReferenceException(fieldName);
+            }
+
+            return readed;
+        }
+
+        /// <summary>
+        /// Reads string from db result
+        /// </summary>
+        /// <param name="fieldName">FieldName</param>
+        /// <returns>Readed value</returns>
+        public string? ReadStringN(string fieldName)
+        {
+            if (UnderlyingReader.IsDBNull(fieldName))
+            {
+                return null;
+            }
+
             return UnderlyingReader.GetString(fieldName);
+        }
+
+        /// <summary>
+        /// Reads value from db result
+        /// </summary>
+        /// <param name="fieldName">FieldName</param>
+        /// <returns>Readed value</returns>
+        public byte ReadByte(string fieldName)
+        {
+            byte? readed = ReadByteN(fieldName);
+            if (!readed.HasValue)
+            {
+                throw new NullReferenceException(fieldName);
+            }
+
+            return readed.Value;
+        }
+
+        /// <summary>
+        /// Reads value from db result
+        /// </summary>
+        /// <param name="fieldName">FieldName</param>
+        /// <returns>Readed value</returns>
+        public byte? ReadByteN(string fieldName)
+        {
+            if (UnderlyingReader.IsDBNull(fieldName))
+            {
+                return null;
+            }
+
+            return UnderlyingReader.GetByte(fieldName);
+        }
+
+        /// <summary>
+        /// Reads value from db result
+        /// </summary>
+        /// <param name="fieldName">FieldName</param>
+        /// <returns>Readed value</returns>
+        public short ReadInt16(string fieldName)
+        {
+            short? readed = ReadInt16N(fieldName);
+            if (!readed.HasValue)
+            {
+                throw new NullReferenceException(fieldName);
+            }
+
+            return readed.Value;
+        }
+
+        /// <summary>
+        /// Reads value from db result
+        /// </summary>
+        /// <param name="fieldName">FieldName</param>
+        /// <returns>Readed value</returns>
+        public short? ReadInt16N(string fieldName)
+        {
+            if (UnderlyingReader.IsDBNull(fieldName))
+            {
+                return null;
+            }
+
+            return UnderlyingReader.GetInt16(fieldName);
         }
 
         /// <summary>
@@ -105,6 +197,37 @@ namespace Erlin.Lib.Database.MsSql
             }
 
             return UnderlyingReader.GetInt32(fieldName);
+        }
+
+        /// <summary>
+        /// Reads value from db result
+        /// </summary>
+        /// <param name="fieldName">FieldName</param>
+        /// <returns>Readed value</returns>
+        public bool ReadBool(string fieldName)
+        {
+            bool? readed = ReadBoolN(fieldName);
+            if (!readed.HasValue)
+            {
+                throw new NullReferenceException(fieldName);
+            }
+
+            return readed.Value;
+        }
+
+        /// <summary>
+        /// Reads value from db result
+        /// </summary>
+        /// <param name="fieldName">FieldName</param>
+        /// <returns>Readed value</returns>
+        public bool? ReadBoolN(string fieldName)
+        {
+            if (UnderlyingReader.IsDBNull(fieldName))
+            {
+                return null;
+            }
+
+            return UnderlyingReader.GetBoolean(fieldName);
         }
 
         /// <summary>

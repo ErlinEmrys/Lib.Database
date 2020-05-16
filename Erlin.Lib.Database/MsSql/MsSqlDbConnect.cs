@@ -8,6 +8,7 @@ using System.Linq;
 
 using Erlin.Lib.Common;
 using Erlin.Lib.Common.Exceptions;
+using Erlin.Lib.Database.MsSql.Schema;
 using Erlin.Lib.Database.Schema;
 
 using Microsoft.Data.SqlClient;
@@ -78,62 +79,11 @@ namespace Erlin.Lib.Database.MsSql
         /// Read complete databae schema
         /// </summary>
         /// <returns>Parsed database schema</returns>
-        public DbObjectCatalogSchema ReadSchema()
+        public MsSqlDbSchema ReadSchema()
         {
             SqlConnectionStringBuilder connStringBuilder = new SqlConnectionStringBuilder(_connectionString);
-
-            const string SQL = @"
-SELECT so.id AS ObjectId, sch.name as SchemaName, so.name AS ObjectName, so.[type] AS ObjectType, sc.[text] AS [Text],
-CAST( 
-case 
-    when ( select major_id from sys.extended_properties
-			where major_id = so.id AND minor_id = 0 AND class = 1 AND name = N'microsoft_database_tools_support'
-		 ) is not null then 1
-    else 0
-end AS bit) AS [IsSystemObject]
-
-FROM sys.sysobjects so WITH(NOLOCK)
-JOIN sys.syscomments sc WITH(NOLOCK) ON so.id = sc.id
-JOIN sys.schemas sch WITH(NOLOCK) ON so.[uid] = sch.[schema_id] AND sch.name != 'sys'
-ORDER BY so.name
-
-SELECT d.name as SchemaName, b.name as ObjectName, a.name as ParamName, c.name as TypeName, a.[prec] AS TypeLength, a.xprec AS TypePrecision, a.xscale AS TypeScale, a.isnullable AS IsNullable, b.[type] AS ObjectType, a.colid AS ColumnId, a.cdefault AS ColumndDefaultObjectId,a.[collation] AS [Collation],
-CAST( 
-case 
-	when t.is_ms_shipped = 1 then 1
-    when ( select major_id from sys.extended_properties
-			where major_id = t.object_id AND minor_id = 0 AND class = 1 AND name = N'microsoft_database_tools_support'
-		 ) is not null then 1
-	when ( select major_id from sys.extended_properties
-			where major_id = a.id AND minor_id = 0 AND class = 1 AND name = N'microsoft_database_tools_support'
-		 ) is not null then 1
-    else 0
-end AS bit) AS [IsSystemObject]
-
-FROM syscolumns a WITH(NOLOCK)
-JOIN sysobjects b WITH(NOLOCK) ON a.id = b.id
-JOIN systypes c WITH(NOLOCK) ON a.xtype = c.xtype AND c.xtype=c.xusertype
-JOIN sys.schemas d WITH(NOLOCK) ON b.[uid] = d.[schema_id] AND d.name != 'sys'
-LEFT JOIN sys.tables t ON b.id = t.object_id
-ORDER BY SchemaName, ObjectName, ParamName
-";
-
-            DataSet data = GetDataSetImpl(SQL, CommandType.Text, null);
-            if (data.Tables.Count != 2)
-            {
-                throw new InvalidDataException("Cannot get database schema - query returned unexpected numbers of table results!");
-            }
-
-            DbObjectCatalogSchema result = new DbObjectCatalogSchema(connStringBuilder.InitialCatalog, connStringBuilder.DataSource);
-
-            DataTable textTable = data.Tables[0];
-            DataTable paramTable = data.Tables[1];
-
-            Dictionary<long, string> defaultValues = new Dictionary<long, string>();
-
-            ReadScriptedObjects(textTable, defaultValues, result);
-            ReadParamObjects(paramTable, defaultValues, result);
-
+            MsSqlDbSchema result = new MsSqlDbSchema(connStringBuilder.DataSource, connStringBuilder.InitialCatalog);
+            result.ReadSchema(this);
             return result;
         }
 
@@ -472,18 +422,29 @@ ORDER BY SchemaName, ObjectName, ParamName
         }
 
         /// <summary>
-        /// Returns dataset from SQL stored procedure
+        /// Returns reader from SQL query
+        /// </summary>
+        /// <param name="query">SQL query</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Reader</returns>
+        public MsSqlDataReader GetDataReader(string query, List<SqlParam>? prms)
+        {
+            return GetDataReaderImpl(query, CommandType.Text, prms);
+        }
+
+        /// <summary>
+        /// Returns reader from SQL stored procedure
         /// </summary>
         /// <param name="sp">SQL stored procedure</param>
         /// <param name="prms">SQL parameters</param>
-        /// <returns>Dataset</returns>
-        public MsSqlDataReader GetDataReaderSp(string sp, List<SqlParam> prms)
+        /// <returns>reader</returns>
+        public MsSqlDataReader GetDataReaderSp(string sp, List<SqlParam>? prms)
         {
             return GetDataReaderImpl(sp, CommandType.StoredProcedure, prms);
         }
 
         [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification = "DataSet should not be IDisposable.")]
-        private MsSqlDataReader GetDataReaderImpl(string commandText, CommandType commandType, List<SqlParam> prms)
+        private MsSqlDataReader GetDataReaderImpl(string commandText, CommandType commandType, List<SqlParam>? prms)
         {
             SqlCommand command = CreateSqlCommand(commandText, commandType, prms);
             return new MsSqlDataReader(command.ExecuteReader());

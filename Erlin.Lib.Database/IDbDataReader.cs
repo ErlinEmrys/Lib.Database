@@ -26,6 +26,40 @@ namespace Erlin.Lib.Database
             where T : class, IDbReadable, new();
 
         /// <summary>
+        /// Advances the data reader to the next result, when reading the results of batch Transact-SQL statements.
+        /// </summary>
+        /// <returns><see langword="true" /> if there are more result sets; otherwise <see langword="false" />.</returns>
+        bool NextResult();
+
+        /// <summary>
+        /// Reads value from db result
+        /// </summary>
+        /// <param name="fieldName">FieldName</param>
+        /// <returns>Readed value</returns>
+        byte ReadByte(string fieldName);
+
+        /// <summary>
+        /// Reads value from db result
+        /// </summary>
+        /// <param name="fieldName">FieldName</param>
+        /// <returns>Readed value</returns>
+        byte? ReadByteN(string fieldName);
+
+        /// <summary>
+        /// Reads value from db result
+        /// </summary>
+        /// <param name="fieldName">FieldName</param>
+        /// <returns>Readed value</returns>
+        short ReadInt16(string fieldName);
+
+        /// <summary>
+        /// Reads value from db result
+        /// </summary>
+        /// <param name="fieldName">FieldName</param>
+        /// <returns>Readed value</returns>
+        short? ReadInt16N(string fieldName);
+
+        /// <summary>
         /// Reads value from db result
         /// </summary>
         /// <param name="fieldName">FieldName</param>
@@ -44,7 +78,27 @@ namespace Erlin.Lib.Database
         /// </summary>
         /// <param name="fieldName">FieldName</param>
         /// <returns>Readed value</returns>
+        bool ReadBool(string fieldName);
+
+        /// <summary>
+        /// Reads value from db result
+        /// </summary>
+        /// <param name="fieldName">FieldName</param>
+        /// <returns>Readed value</returns>
+        bool? ReadBoolN(string fieldName);
+        /// <summary>
+        /// Reads value from db result
+        /// </summary>
+        /// <param name="fieldName">FieldName</param>
+        /// <returns>Readed value</returns>
         string ReadString(string fieldName);
+
+        /// <summary>
+        /// Reads value from db result
+        /// </summary>
+        /// <param name="fieldName">FieldName</param>
+        /// <returns>Readed value</returns>
+        string? ReadStringN(string fieldName);
 
         /// <summary>
         /// Reads value from db result
