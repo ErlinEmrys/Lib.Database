@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Text;
 
@@ -27,6 +28,9 @@ namespace Erlin.Lib.Database
             using (PgSqlDbConnect connect = new PgSqlDbConnect(connString))
             {
                 connect.Open();
+
+                PgSqlDataReader reader = connect.GetDataReaderSp("sp_group_chat_getall", new List<SqlParam> { new SqlParam("p_game_id", 1, DbType.Int32) });
+
                 PgSqlDbSchema dbSchema = connect.ReadSchema();
                 StringBuilder createScript = dbSchema.GenerateCreateScript();
                 FileHelper.WriteAllText(outputFilePath, createScript.ToString());

@@ -144,6 +144,23 @@ namespace Erlin.Lib.Database.PgSql
         }
 
         /// <summary>
+        /// Returns reader from SQL stored procedure
+        /// </summary>
+        /// <param name="sp">SQL stored procedure</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>reader</returns>
+        public PgSqlDataReader GetDataReaderSp(string sp, List<SqlParam>? prms)
+        {
+            return GetDataReaderImpl(sp, CommandType.StoredProcedure, prms);
+        }
+
+        private PgSqlDataReader GetDataReaderImpl(string commandText, CommandType commandType, List<SqlParam>? prms)
+        {
+            NpgsqlCommand command = CreateSqlCommand(commandText, commandType, prms);
+            return new PgSqlDataReader(command.ExecuteReader());
+        }
+
+        /// <summary>
         /// Creates new sql command
         /// </summary>
         /// <param name="commandText">Command text</param>
