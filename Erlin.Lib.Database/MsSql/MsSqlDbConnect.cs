@@ -20,10 +20,6 @@ namespace Erlin.Lib.Database.MsSql
     /// </summary>
     public sealed class MsSqlDbConnect : IDbConnect
     {
-        /// <summary>
-        /// Default timeout for every command (seconds)
-        /// </summary>
-        public const int DEFAULT_COMMAND_TIMEOUT_SECONDS = 500;
         private readonly SqlConnection _connection;
         private readonly string _connectionString;
         private SqlTransaction? _transaction;
@@ -465,7 +461,7 @@ namespace Erlin.Lib.Database.MsSql
             SqlCommand result = new SqlCommand();
             result.Connection = _connection;
             result.Transaction = _transaction;
-            result.CommandTimeout = DEFAULT_COMMAND_TIMEOUT_SECONDS;
+            result.CommandTimeout = IDbConnect.DEFAULT_COMMAND_TIMEOUT_SECONDS;
             if (commandTimeOut.HasValue)
             {
                 result.CommandTimeout = commandTimeOut.Value;
@@ -502,7 +498,7 @@ namespace Erlin.Lib.Database.MsSql
 
                     if (fParam.SqlType.HasValue)
                     {
-                        newpar.SqlDbType = fParam.SqlType.Value;
+                        newpar.DbType = fParam.SqlType.Value;
                     }
 
                     if (fParam.Size.HasValue)

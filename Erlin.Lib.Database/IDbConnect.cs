@@ -15,6 +15,11 @@ namespace Erlin.Lib.Database
     public interface IDbConnect : IDisposable
     {
         /// <summary>
+        /// Default timeout for every command (seconds)
+        /// </summary>
+        public const int DEFAULT_COMMAND_TIMEOUT_SECONDS = 500;
+
+        /// <summary>
         /// Open connection to database
         /// </summary>
         void Open();

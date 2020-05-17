@@ -6,6 +6,8 @@ using System.Text;
 using Erlin.Lib.Common.FileSystem;
 using Erlin.Lib.Database.MsSql;
 using Erlin.Lib.Database.MsSql.Schema;
+using Erlin.Lib.Database.PgSql;
+using Erlin.Lib.Database.PgSql.Schema;
 using Erlin.Lib.Database.Schema;
 
 namespace Erlin.Lib.Database
@@ -22,10 +24,10 @@ namespace Erlin.Lib.Database
         /// <param name="outputFilePath">Path to output file</param>
         public static void ReGenerate(string connString, string outputFilePath)
         {
-            using (MsSqlDbConnect connect = new MsSqlDbConnect(connString))
+            using (PgSqlDbConnect connect = new PgSqlDbConnect(connString))
             {
                 connect.Open();
-                MsSqlDbSchema dbSchema = connect.ReadSchema();
+                PgSqlDbSchema dbSchema = connect.ReadSchema();
                 StringBuilder createScript = dbSchema.GenerateCreateScript();
                 FileHelper.WriteAllText(outputFilePath, createScript.ToString());
             }

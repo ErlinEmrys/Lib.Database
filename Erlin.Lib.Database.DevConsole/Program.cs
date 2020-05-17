@@ -40,7 +40,7 @@ namespace Erlin.Lib.Database.DevConsole
                                             .AddJsonFile($"appsettings.{environmentName}.json", true, true)
                                             .Build();
 
-                string connString = config.GetConnectionString("devDb");
+                string connString = config.GetConnectionString("drdWebDb");
                 DbSchemaGenerator.ReGenerate(connString, @Path.Combine(AppContext.BaseDirectory, "output.sql"));
             }
             finally
