@@ -14,8 +14,8 @@ namespace Erlin.Lib.Database.MsSql.Schema
     /// </summary>
     public class MsSqlDbSchema
     {
-        private List<MsSqlTableSchema> _tables = new List<MsSqlTableSchema>();
-        private List<MsSqlStoredProcedureSchema> _storedProcedures = new List<MsSqlStoredProcedureSchema>();
+        private readonly List<MsSqlStoredProcedureSchema> _storedProcedures = new List<MsSqlStoredProcedureSchema>();
+        private readonly List<MsSqlTableSchema> _tables = new List<MsSqlTableSchema>();
 
         /// <summary>
         /// Name of server from which this schema originates
