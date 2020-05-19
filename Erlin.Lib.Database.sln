@@ -5,7 +5,9 @@ VisualStudioVersion = 16.0.29311.281
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Erlin.Lib.Database", "Erlin.Lib.Database\Erlin.Lib.Database.csproj", "{A4AEC858-1B45-410D-9E0F-6A9036B3CE98}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Erlin.Lib.Database.DevConsole", "Erlin.Lib.Database.DevConsole\Erlin.Lib.Database.DevConsole.csproj", "{B58E0964-BA49-4A5D-B589-F4C2897DA366}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Erlin.Lib.Database.DevConsole", "Erlin.Lib.Database.DevConsole\Erlin.Lib.Database.DevConsole.csproj", "{B58E0964-BA49-4A5D-B589-F4C2897DA366}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Erlin.Lib.Database.PGenesis.WinService", "Erlin.Lib.Database.PGenesis.WinService\Erlin.Lib.Database.PGenesis.WinService.csproj", "{CD9391AB-1CFF-4B66-8E42-43CA34202EC9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +23,10 @@ Global
 		{B58E0964-BA49-4A5D-B589-F4C2897DA366}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B58E0964-BA49-4A5D-B589-F4C2897DA366}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B58E0964-BA49-4A5D-B589-F4C2897DA366}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CD9391AB-1CFF-4B66-8E42-43CA34202EC9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CD9391AB-1CFF-4B66-8E42-43CA34202EC9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CD9391AB-1CFF-4B66-8E42-43CA34202EC9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CD9391AB-1CFF-4B66-8E42-43CA34202EC9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

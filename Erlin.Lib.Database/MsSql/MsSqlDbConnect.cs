@@ -406,12 +406,12 @@ namespace Erlin.Lib.Database.MsSql
         /// <param name="sp">SQL stored procedure</param>
         /// <param name="prms">SQL parameters</param>
         /// <returns>Dataset</returns>
-        public void ExecuteSp(string sp, List<SqlParam> prms)
+        public void ExecuteSp(string sp, List<SqlParam>? prms = null)
         {
             ExecuteImpl(sp, CommandType.StoredProcedure, prms);
         }
 
-        private void ExecuteImpl(string commandText, CommandType commandType, List<SqlParam> prms)
+        private void ExecuteImpl(string commandText, CommandType commandType, List<SqlParam>? prms = null)
         {
             SqlCommand command = CreateSqlCommand(commandText, commandType, prms);
             command.ExecuteNonQuery();
@@ -496,16 +496,28 @@ namespace Erlin.Lib.Database.MsSql
                         fParam.SqlParameter = newpar;
                     }
 
-                    if (fParam.SqlType.HasValue)
-                    {
-                        newpar.DbType = fParam.SqlType.Value;
-                    }
+                    newpar.SqlDbType = ConvertDatabaseType(fParam.SqlType);
 
                     if (fParam.Size.HasValue)
                     {
                         newpar.Size = fParam.Size.Value;
                     }
                 }
+            }
+        }
+
+        private static SqlDbType ConvertDatabaseType(SqlParamType unitedType)
+        {
+            switch (unitedType)
+            {
+                case SqlParamType.Int32:
+                    return SqlDbType.Int;
+                case SqlParamType.NVarchar:
+                    return SqlDbType.NVarChar;
+                case SqlParamType.Varchar:
+                    return SqlDbType.VarChar;
+                default:
+                    throw new EnumValueNotImplementedException(unitedType);
             }
         }
 

@@ -3,12 +3,17 @@ using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.Text;
+using System.Threading;
 
 using Erlin.Lib.Common;
+using Erlin.Lib.Common.Exceptions;
+using Erlin.Lib.Common.Time;
 using Erlin.Lib.Database.PgSql.Schema;
 using Erlin.Lib.Database.Schema;
 
 using Npgsql;
+
+using NpgsqlTypes;
 
 namespace Erlin.Lib.Database.PgSql
 {
@@ -17,9 +22,36 @@ namespace Erlin.Lib.Database.PgSql
     /// </summary>
     public sealed class PgSqlDbConnect : IDbConnect
     {
-        private readonly NpgsqlConnection _connection;
+        private const string SMP_GENESIS_REQUEST = "spm_genesis_request";
+        private const string SMP_READ_FILE = "spm_read_file_utf8";
+
+        /// <summary>
+        /// Channel name for pgenesis requests
+        /// </summary>
+        public const string CHANNEL_GENESIS_REQUEST = "genesis_request";
+
+        /// <summary>
+        /// Channel name for pgenesis respond
+        /// </summary>
+        public const string CHANNEL_GENESIS_RESPOND = "genesis_respond";
+
+        /// <summary>
+        /// Channel name for pgenesis delete
+        /// </summary>
+        public const string CHANNEL_GENESIS_DELETE = "genesis_delete";
+
         private readonly NpgsqlConnectionStringBuilder _connectionString;
         private NpgsqlTransaction? _transaction;
+
+        /// <summary>
+        /// Default query timeout
+        /// </summary>
+        public int DefaultTimeout { get; private set; } = 30 * 1000;
+
+        /// <summary>
+        /// Underlying connection object
+        /// </summary>
+        public NpgsqlConnection UnderlyingConnection { get; }
 
         /// <summary>
         /// Ctor
@@ -37,13 +69,13 @@ namespace Erlin.Lib.Database.PgSql
                 throw new InvalidOperationException($"Connection string {_connectionString} does not contains Database!");
             }
 
-            _connection = new NpgsqlConnection(connectionString);
+            UnderlyingConnection = new NpgsqlConnection(connectionString);
         }
 
         /// <summary>Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.</summary>
         public void Dispose()
         {
-            _connection.Dispose();
+            UnderlyingConnection.Dispose();
         }
 
         /// <summary>
@@ -51,7 +83,7 @@ namespace Erlin.Lib.Database.PgSql
         /// </summary>
         public void Open()
         {
-            _connection.Open();
+            UnderlyingConnection.Open();
         }
 
         /// <summary>
@@ -59,7 +91,7 @@ namespace Erlin.Lib.Database.PgSql
         /// </summary>
         public void Close()
         {
-            _connection.Close();
+            UnderlyingConnection.Close();
         }
 
         /// <summary>
@@ -73,7 +105,7 @@ namespace Erlin.Lib.Database.PgSql
                 throw new InvalidOperationException("Cannot begin another database transaction - transaction in progress!");
             }
 
-            _transaction = _connection.BeginTransaction();
+            _transaction = UnderlyingConnection.BeginTransaction();
             return _transaction;
         }
 
@@ -111,11 +143,45 @@ namespace Erlin.Lib.Database.PgSql
         /// Read complete database schema
         /// </summary>
         /// <returns>Parsed database schema</returns>
-        public PgSqlDbSchema ReadSchema()
+        public byte[] ReadSchema()
         {
-            PgSqlDbSchema result = new PgSqlDbSchema(_connectionString.Host!, _connectionString.Database!);
-            result.ReadSchema(this);
-            return result;
+            string token = $"{Guid.NewGuid()}";
+            string? filePath = null;
+
+            UnderlyingConnection.Notification += delegate(object o, NpgsqlNotificationEventArgs args)
+                                        {
+                                            try
+                                            {
+                                                if (args.Channel == CHANNEL_GENESIS_RESPOND)
+                                                {
+                                                    filePath = args.Payload;
+                                                }
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                Log.Error(ex);
+                                            }
+                                        };
+            //Request the creation of file
+            ExecuteSp(SMP_GENESIS_REQUEST, new List<SqlParam> { new SqlParam("command", 0, SqlParamType.Int32), new SqlParam("token", token, SqlParamType.NVarchar) });
+            if (!UnderlyingConnection.Wait(DefaultTimeout))
+            {
+                throw new TimeoutException("CHANNEL_GENESIS_RESPOND");
+            }
+
+            if (string.IsNullOrEmpty(filePath))
+            {
+                throw new TimeoutException("FILE_PATH_EMPTY");
+            }
+
+            //Read the file
+            byte[] data = ExecuteSp<byte[]>(SMP_READ_FILE, new List<SqlParam> { new SqlParam("path", filePath, SqlParamType.NVarchar) });
+
+            //Delete the file
+            ExecuteSp(SMP_GENESIS_REQUEST,
+                      new List<SqlParam> { new SqlParam("command", 1, SqlParamType.Int32), new SqlParam("token", filePath, SqlParamType.NVarchar) });
+
+            return data;
         }
 
         /// <summary>
@@ -146,10 +212,21 @@ namespace Erlin.Lib.Database.PgSql
         /// <summary>
         /// Returns reader from SQL stored procedure
         /// </summary>
+        /// <param name="query">SQL stored procedure</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>reader</returns>
+        public PgSqlDataReader GetDataReader(string query, List<SqlParam>? prms = null)
+        {
+            return GetDataReaderImpl(query, CommandType.Text, prms);
+        }
+
+        /// <summary>
+        /// Returns reader from SQL stored procedure
+        /// </summary>
         /// <param name="sp">SQL stored procedure</param>
         /// <param name="prms">SQL parameters</param>
         /// <returns>reader</returns>
-        public PgSqlDataReader GetDataReaderSp(string sp, List<SqlParam>? prms)
+        public PgSqlDataReader GetDataReaderSp(string sp, List<SqlParam>? prms = null)
         {
             return GetDataReaderImpl(sp, CommandType.StoredProcedure, prms);
         }
@@ -158,6 +235,56 @@ namespace Erlin.Lib.Database.PgSql
         {
             NpgsqlCommand command = CreateSqlCommand(commandText, commandType, prms);
             return new PgSqlDataReader(command.ExecuteReader());
+        }
+
+        /// <summary>
+        /// Returns dataset from SQL stored procedure
+        /// </summary>
+        /// <param name="query">SQL stored procedure</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Dataset</returns>
+        public void Execute(string query, List<SqlParam>? prms = null)
+        {
+            ExecuteImpl<object>(query, CommandType.Text, prms);
+        }
+
+        /// <summary>
+        /// Returns dataset from SQL stored procedure
+        /// </summary>
+        /// <param name="query">SQL stored procedure</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Dataset</returns>
+        public T Execute<T>(string query, List<SqlParam>? prms = null)
+        {
+            return ExecuteImpl<T>(query, CommandType.Text, prms);
+        }
+
+        /// <summary>
+        /// Returns dataset from SQL stored procedure
+        /// </summary>
+        /// <param name="sp">SQL stored procedure</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Dataset</returns>
+        public void ExecuteSp(string sp, List<SqlParam>? prms = null)
+        {
+            ExecuteImpl<object>(sp, CommandType.StoredProcedure, prms);
+        }
+
+        /// <summary>
+        /// Returns dataset from SQL stored procedure
+        /// </summary>
+        /// <param name="sp">SQL stored procedure</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Dataset</returns>
+        public T ExecuteSp<T>(string sp, List<SqlParam>? prms = null)
+        {
+            return ExecuteImpl<T>(sp, CommandType.StoredProcedure, prms);
+        }
+
+        private T ExecuteImpl<T>(string commandText, CommandType commandType, List<SqlParam>? prms)
+        {
+            NpgsqlCommand command = CreateSqlCommand(commandText, commandType, prms);
+            return (T)command.ExecuteScalar();
         }
 
         /// <summary>
@@ -171,7 +298,7 @@ namespace Erlin.Lib.Database.PgSql
         private NpgsqlCommand CreateSqlCommand(string commandText, CommandType commandType, List<SqlParam>? prms, int? commandTimeOut = null)
         {
             NpgsqlCommand result = new NpgsqlCommand();
-            result.Connection = _connection;
+            result.Connection = UnderlyingConnection;
             result.Transaction = _transaction;
             result.CommandTimeout = IDbConnect.DEFAULT_COMMAND_TIMEOUT_SECONDS;
             if (commandTimeOut.HasValue)
@@ -208,16 +335,27 @@ namespace Erlin.Lib.Database.PgSql
                         fParam.SqlParameter = newpar;
                     }
 
-                    if (fParam.SqlType.HasValue)
-                    {
-                        newpar.DbType = fParam.SqlType.Value;
-                    }
+                    newpar.NpgsqlDbType = ConvertDatabaseType(fParam.SqlType);
 
                     if (fParam.Size.HasValue)
                     {
                         newpar.Size = fParam.Size.Value;
                     }
                 }
+            }
+        }
+
+        private static NpgsqlDbType ConvertDatabaseType(SqlParamType unitedType)
+        {
+            switch (unitedType)
+            {
+                case SqlParamType.Int32:
+                    return NpgsqlDbType.Integer;
+                case SqlParamType.NVarchar:
+                case SqlParamType.Varchar:
+                    return NpgsqlDbType.Varchar;
+                default:
+                    throw new EnumValueNotImplementedException(unitedType);
             }
         }
     }
