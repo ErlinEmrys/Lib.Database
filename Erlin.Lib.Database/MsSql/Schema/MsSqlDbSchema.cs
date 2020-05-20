@@ -64,7 +64,7 @@ namespace Erlin.Lib.Database.MsSql.Schema
         public void ReadSchema(MsSqlDbConnect connect)
         {
             string sqlQuery = MsSqlDbObjectParam.SelectQuery + MsSqlDbObjectText.SelectQuery;
-            MsSqlDataReader reader = connect.GetDataReader(sqlQuery, null);
+            MsSqlDataReader reader = connect.GetDataReader(sqlQuery);
             List<MsSqlDbObjectParam> prms = reader.ReadList<MsSqlDbObjectParam>();
             if (!reader.NextResult())
             {

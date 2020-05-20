@@ -1,15 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.IO;
-using System.Linq;
 
 using Erlin.Lib.Common;
 using Erlin.Lib.Common.Exceptions;
 using Erlin.Lib.Database.MsSql.Schema;
-using Erlin.Lib.Database.Schema;
 
 using Microsoft.Data.SqlClient;
 
@@ -72,54 +68,6 @@ namespace Erlin.Lib.Database.MsSql
         }
 
         /// <summary>
-        /// Read complete databae schema
-        /// </summary>
-        /// <returns>Parsed database schema</returns>
-        public MsSqlDbSchema ReadSchema()
-        {
-            SqlConnectionStringBuilder connStringBuilder = new SqlConnectionStringBuilder(_connectionString);
-            MsSqlDbSchema result = new MsSqlDbSchema(connStringBuilder.DataSource, connStringBuilder.InitialCatalog);
-            result.ReadSchema(this);
-            return result;
-        }
-
-        /// <summary>
-        /// Returns dataset from SQL query
-        /// </summary>
-        /// <param name="query">SQL query</param>
-        /// <param name="prms">SQL parameters</param>
-        /// <returns>Dataset</returns>
-        public DataSet GetDataSetQuery(string query, List<SqlParam> prms)
-        {
-            return GetDataSetImpl(query, CommandType.Text, prms);
-        }
-
-        //private static void GetReturnedValues(List<SqlParam> prms)
-        //{
-        //    if (prms != null)
-        //    {
-        //        foreach (SqlParam fParam in prms)
-        //        {
-        //            if (fParam.Direction != ParameterDirection.Input && fParam.SqlParameter != null)
-        //            {
-        //                fParam.Value = SimpleConvert.ConvertDbNullToNull(fParam.SqlParameter.Value);
-
-        //                //Null original param object - we can re-use this object
-        //                fParam.SqlParameter = null;
-        //            }
-        //        }
-        //    }
-        //}
-
-        /// <summary>
-        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
-        /// </summary>
-        public void Dispose()
-        {
-            _connection.Dispose();
-        }
-
-        /// <summary>
         /// Begin new database transaction
         /// </summary>
         /// <returns>Begined transaction</returns>
@@ -164,199 +112,15 @@ namespace Erlin.Lib.Database.MsSql
             _transaction = null;
         }
 
-        private static SqlDbType ConvertToDbType(string input)
+        /// <summary>
+        /// Returns dataset from SQL query
+        /// </summary>
+        /// <param name="query">SQL query</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Dataset</returns>
+        public DataSet GetDataSet(string query, List<SqlParam>? prms = null)
         {
-            if (input == "numeric")
-            {
-                return SqlDbType.Decimal;
-            }
-
-            return SimpleConvert.Convert<SqlDbType>(input);
-        }
-
-        private static void ReadParamObjects(DataTable paramTable, Dictionary<long, string> defaultValues, DbObjectCatalogSchema result)
-        {
-            foreach (DataRow? fRow in paramTable.Rows)
-            {
-                if(fRow == null)
-                {
-                    continue;
-                }
-
-                bool isSystemObject = SimpleConvert.Convert<bool>(fRow["IsSystemObject"]);
-                if (isSystemObject)
-                {
-                    continue;
-                }
-
-                string dbSchema = SimpleConvert.Convert<string>(fRow["SchemaName"]);
-                string objectName = SimpleConvert.Convert<string>(fRow["ObjectName"]);
-                string paramName = SimpleConvert.Convert<string>(fRow["ParamName"]);
-                string typeName = SimpleConvert.Convert<string>(fRow["TypeName"]);
-                int typeLength = SimpleConvert.Convert<int>(fRow["TypeLength"]);
-                int typePrecision = SimpleConvert.Convert<int>(fRow["TypePrecision"]);
-                int typeScale = SimpleConvert.Convert<int>(fRow["TypeScale"]);
-                bool isNullable = SimpleConvert.Convert<bool>(fRow["IsNullable"]);
-                MsSqlDbObjectType type = SimpleConvert.Convert<MsSqlDbObjectType>(fRow["ObjectType"]);
-                int columnId = SimpleConvert.Convert<int>(fRow["ColumnId"]);
-                long columndDefaultObjectId = SimpleConvert.Convert<long>(fRow["ColumndDefaultObjectId"]);
-                string collation = SimpleConvert.Convert<string>(fRow["Collation"]);
-
-                DbObjectTypeSchema dbObjectType = new DbObjectTypeSchema();
-                dbObjectType.AllowNull = isNullable;
-                dbObjectType.Lenght = typeLength;
-                dbObjectType.Precision = typePrecision;
-                dbObjectType.Scale = typeScale;
-                dbObjectType.SqlType = ConvertToDbType(typeName);
-
-                DbObjectTableColumnSchema column = new DbObjectTableColumnSchema(paramName, dbObjectType, collation);
-                column.OrderId = columnId;
-                if (defaultValues.ContainsKey(columndDefaultObjectId))
-                {
-                    column.DefaultValue = defaultValues[columndDefaultObjectId];
-                }
-
-                switch (type)
-                {
-                    case MsSqlDbObjectType.V:
-                        break;
-                    case MsSqlDbObjectType.FN:
-                    case MsSqlDbObjectType.TF:
-                        DbObjectFunctionSchema func = result.Functions.FirstOrDefault(f => f.IsSameDbName(dbSchema, objectName)) ??
-                                                      result.TableValuedFunctions.FirstOrDefault(f => f.IsSameDbName(dbSchema, objectName));
-
-                        if (func == null)
-                        {
-                            throw new InvalidOperationException("Function not found, but should be present!");
-                        }
-                        else if (string.IsNullOrEmpty(column.Name) || column.Name.StartsWith("@", StringComparison.Ordinal) || type == MsSqlDbObjectType.TF && column.Name == "value")
-                        {
-                            //Parameter without name == return value
-                            func.ReturnValues.Add(column);
-                        }
-                        else
-                        {
-                            func.Parameters.Add(column);
-                        }
-
-                        break;
-                    case MsSqlDbObjectType.P:
-                        DbObjectStoredProcedureSchema sp = result.StoredProcedures.FirstOrDefault(f => f.IsSameDbName(dbSchema, objectName));
-                        if (sp == null)
-                        {
-                            throw new InvalidOperationException("Stored procedure not found, but should be present!");
-                        }
-
-                        sp.Parameters.Add(column);
-                        break;
-                    case MsSqlDbObjectType.U:
-                        DbObjectTableSchema objectTable = result.Tables.FirstOrDefault(t => t.IsSameDbName(dbSchema, objectName));
-                        if (objectTable == null)
-                        {
-                            objectTable = new DbObjectTableSchema(objectName, dbSchema);
-                            result.Tables.Add(objectTable);
-                        }
-
-                        objectTable.AddColumn(column);
-                        break;
-                    default:
-                        throw new CaseNotExpectedException(type);
-                }
-            }
-        }
-
-        private static void ReadScriptedObjects(DataTable textTable, Dictionary<long, string> defaultValues, DbObjectCatalogSchema result)
-        {
-            Dictionary<long, DbObjectTriggerSchema> triggers = new Dictionary<long, DbObjectTriggerSchema>();
-            foreach (DataRow? fRow in textTable.Rows)
-            {
-                if (fRow == null)
-                {
-                    continue;
-                }
-
-                bool isSystemObject = SimpleConvert.Convert<bool>(fRow["IsSystemObject"]);
-                if (isSystemObject)
-                {
-                    continue;
-                }
-
-                long objectId = SimpleConvert.Convert<long>(fRow["ObjectId"]);
-                string dbSchema = SimpleConvert.Convert<string>(fRow["SchemaName"]);
-                string objectName = SimpleConvert.Convert<string>(fRow["ObjectName"]);
-                MsSqlDbObjectType type = SimpleConvert.Convert<MsSqlDbObjectType>(fRow["ObjectType"]);
-                string text = SimpleConvert.Convert<string>(fRow["Text"]);
-                CheckText(objectName, text);
-                if (!string.IsNullOrEmpty(text) && text.Contains("DataAnalytics"))
-                {
-                    Console.WriteLine(objectName);
-                }
-
-                switch (type)
-                {
-                    case MsSqlDbObjectType.D:
-                        defaultValues.Add(objectId, text);
-                        break;
-                    case MsSqlDbObjectType.V:
-                        DbObjectViewSchema viewSchema = new DbObjectViewSchema(objectName, dbSchema, text);
-                        result.Views.Add(viewSchema);
-                        break;
-                    case MsSqlDbObjectType.TR:
-                    case MsSqlDbObjectType.P:
-                    case MsSqlDbObjectType.FN:
-                    case MsSqlDbObjectType.TF:
-                        DbObjectTriggerSchema scriptedObject;
-
-                        switch (type)
-                        {
-                            case MsSqlDbObjectType.TR:
-                                if (!triggers.ContainsKey(objectId))
-                                {
-                                    triggers.Add(objectId, new DbObjectTriggerSchema(objectName, objectId, dbSchema));
-                                }
-
-                                scriptedObject = triggers[objectId];
-                                break;
-                            case MsSqlDbObjectType.P:
-                                DbObjectStoredProcedureSchema spSchema = result.StoredProcedures.FirstOrDefault(s => s.IsSameDbName(dbSchema, objectName));
-                                if (spSchema == null)
-                                {
-                                    spSchema = new DbObjectStoredProcedureSchema(objectName, objectId, dbSchema);
-                                    result.StoredProcedures.Add(spSchema);
-                                }
-
-                                scriptedObject = spSchema;
-                                break;
-                            case MsSqlDbObjectType.FN:
-                                DbObjectFunctionSchema fnSchema = result.Functions.FirstOrDefault(s => s.IsSameDbName(dbSchema, objectName));
-                                if (fnSchema == null)
-                                {
-                                    fnSchema = new DbObjectFunctionSchema(objectName, objectId, dbSchema);
-                                    result.Functions.Add(fnSchema);
-                                }
-
-                                scriptedObject = fnSchema;
-                                break;
-                            case MsSqlDbObjectType.TF:
-                                DbObjectTableValuedFunctionSchema tvfSchema = result.TableValuedFunctions.FirstOrDefault(s => s.IsSameDbName(dbSchema, objectName));
-                                if (tvfSchema == null)
-                                {
-                                    tvfSchema = new DbObjectTableValuedFunctionSchema(objectName, objectId, dbSchema);
-                                    result.Functions.Add(tvfSchema);
-                                }
-
-                                scriptedObject = tvfSchema;
-                                break;
-                            default:
-                                throw new CaseNotExpectedException(type);
-                        }
-
-                        scriptedObject.ScriptText += text;
-                        break;
-                    default:
-                        throw new CaseNotExpectedException(type);
-                }
-            }
+            return GetDataSetImpl(query, CommandType.Text, prms);
         }
 
         /// <summary>
@@ -365,16 +129,82 @@ namespace Erlin.Lib.Database.MsSql
         /// <param name="sp">SQL stored procedure</param>
         /// <param name="prms">SQL parameters</param>
         /// <returns>Dataset</returns>
-        public DataSet GetDataSetSp(string sp, List<SqlParam> prms)
+        public DataSet GetDataSetSp(string sp, List<SqlParam>? prms = null)
         {
             return GetDataSetImpl(sp, CommandType.StoredProcedure, prms);
         }
 
-        [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification = "DataSet should not be IDisposable.")]
-        private DataSet GetDataSetImpl(string commandText, CommandType commandType, List<SqlParam>? prms)
+        /// <summary>
+        /// Executes SQL command without return value
+        /// </summary>
+        /// <param name="query">SQL query</param>
+        /// <param name="prms">SQL parameters</param>
+        public void Execute(string query, List<SqlParam>? prms = null)
         {
-            //WriteSqlCommnadToLog(command);
+            ExecuteImpl<object>(query, CommandType.Text, prms);
+        }
 
+        /// <summary>
+        /// Executes SQL stored procedure without return value
+        /// </summary>
+        /// <param name="sp">SQL stored procedure</param>
+        /// <param name="prms">SQL parameters</param>
+        public void ExecuteSp(string sp, List<SqlParam>? prms = null)
+        {
+            ExecuteImpl<object>(sp, CommandType.StoredProcedure, prms);
+        }
+
+        /// <summary>
+        /// Returns reader from SQL query
+        /// </summary>
+        /// <param name="query">SQL query</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Reader</returns>
+        IDbDataReader IDbConnect.GetDataReader(string query, List<SqlParam>? prms)
+        {
+            return GetDataReader(query, prms);
+        }
+
+        /// <summary>
+        /// Returns reader from SQL stored procedure
+        /// </summary>
+        /// <param name="sp">SQL stored procedure</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>reader</returns>
+        IDbDataReader IDbConnect.GetDataReaderSp(string sp, List<SqlParam>? prms)
+        {
+            return GetDataReaderSp(sp, prms);
+        }
+
+        /// <summary>
+        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+        /// </summary>
+        public void Dispose()
+        {
+            _connection.Dispose();
+        }
+
+        /// <summary>
+        /// Read complete database schema
+        /// </summary>
+        /// <returns>Parsed database schema</returns>
+        public MsSqlDbSchema ReadSchema()
+        {
+            SqlConnectionStringBuilder connStringBuilder = new SqlConnectionStringBuilder(_connectionString);
+            MsSqlDbSchema result = new MsSqlDbSchema(connStringBuilder.DataSource, connStringBuilder.InitialCatalog);
+            result.ReadSchema(this);
+            return result;
+        }
+
+        /// <summary>
+        /// Returns dataset
+        /// </summary>
+        /// <param name="commandText">Command text</param>
+        /// <param name="commandType">Command type</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Dataset</returns>
+        private DataSet GetDataSetImpl(string commandText, CommandType commandType, List<SqlParam>? prms = null)
+        {
             DataSet result = new DataSet();
             result.Locale = CultureInfo.InvariantCulture;
 
@@ -384,37 +214,43 @@ namespace Erlin.Lib.Database.MsSql
                 da.Fill(result);
             }
 
-            //WriteExecuteTimeToLog();
-
             return result;
         }
 
-        //private void ExecuteImpl(string commandText, CommandType commandType, List<SqlParam> prms, int? commandTimeOut = null)
-        //{
-        //    SqlCommand command = CreateSqlCommand(commandText, commandType, prms, commandTimeOut);
-
-        //    //WriteSqlCommnadToLog(command);
-        //    command.ExecuteNonQuery();
-        //    //WriteExecuteTimeToLog();
-
-        //    GetReturnedValues(prms);
-        //}
+        /// <summary>
+        /// Executes SQL command with simple return value
+        /// </summary>
+        /// <param name="query">SQL query</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Dataset</returns>
+        public T Execute<T>(string query, List<SqlParam>? prms = null)
+        {
+            return ExecuteImpl<T>(query, CommandType.Text, prms);
+        }
 
         /// <summary>
-        /// Returns dataset from SQL stored procedure
+        /// Executes SQL stored procedure with return value
         /// </summary>
         /// <param name="sp">SQL stored procedure</param>
         /// <param name="prms">SQL parameters</param>
         /// <returns>Dataset</returns>
-        public void ExecuteSp(string sp, List<SqlParam>? prms = null)
+        public T ExecuteSp<T>(string sp, List<SqlParam>? prms = null)
         {
-            ExecuteImpl(sp, CommandType.StoredProcedure, prms);
+            return ExecuteImpl<T>(sp, CommandType.StoredProcedure, prms);
         }
 
-        private void ExecuteImpl(string commandText, CommandType commandType, List<SqlParam>? prms = null)
+        /// <summary>
+        /// Executes SQL command with return value
+        /// </summary>
+        /// <typeparam name="T">Runtime type of expected result</typeparam>
+        /// <param name="commandText">Command text</param>
+        /// <param name="commandType">Command type</param>
+        /// <param name="prms">SQL arguments</param>
+        /// <returns>Result value</returns>
+        private T ExecuteImpl<T>(string commandText, CommandType commandType, List<SqlParam>? prms = null)
         {
             SqlCommand command = CreateSqlCommand(commandText, commandType, prms);
-            command.ExecuteNonQuery();
+            return (T)command.ExecuteScalar();
         }
 
         /// <summary>
@@ -423,7 +259,7 @@ namespace Erlin.Lib.Database.MsSql
         /// <param name="query">SQL query</param>
         /// <param name="prms">SQL parameters</param>
         /// <returns>Reader</returns>
-        public MsSqlDataReader GetDataReader(string query, List<SqlParam>? prms)
+        public MsSqlDataReader GetDataReader(string query, List<SqlParam>? prms = null)
         {
             return GetDataReaderImpl(query, CommandType.Text, prms);
         }
@@ -434,13 +270,19 @@ namespace Erlin.Lib.Database.MsSql
         /// <param name="sp">SQL stored procedure</param>
         /// <param name="prms">SQL parameters</param>
         /// <returns>reader</returns>
-        public MsSqlDataReader GetDataReaderSp(string sp, List<SqlParam>? prms)
+        public MsSqlDataReader GetDataReaderSp(string sp, List<SqlParam>? prms = null)
         {
             return GetDataReaderImpl(sp, CommandType.StoredProcedure, prms);
         }
 
-        [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification = "DataSet should not be IDisposable.")]
-        private MsSqlDataReader GetDataReaderImpl(string commandText, CommandType commandType, List<SqlParam>? prms)
+        /// <summary>
+        /// Returns data reader from SQL command
+        /// </summary>
+        /// <param name="commandText">Command text</param>
+        /// <param name="commandType">Command type</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Result data reader</returns>
+        private MsSqlDataReader GetDataReaderImpl(string commandText, CommandType commandType, List<SqlParam>? prms = null)
         {
             SqlCommand command = CreateSqlCommand(commandText, commandType, prms);
             return new MsSqlDataReader(command.ExecuteReader());
@@ -454,9 +296,7 @@ namespace Erlin.Lib.Database.MsSql
         /// <param name="prms">Command parameters</param>
         /// <param name="commandTimeOut">Command timeout</param>
         /// <returns>Sql command</returns>
-        [SuppressMessage("Microsoft.Security", "CA2100:Review SQL queries for security vulnerabilities", Justification = "Parameter CommandText is not supouse to be obtained from user.")]
-        [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification = "Method returns IDisposable object.")]
-        private SqlCommand CreateSqlCommand(string commandText, CommandType commandType, List<SqlParam>? prms, int? commandTimeOut = null)
+        private SqlCommand CreateSqlCommand(string commandText, CommandType commandType, List<SqlParam>? prms = null, int? commandTimeOut = null)
         {
             SqlCommand result = new SqlCommand();
             result.Connection = _connection;
@@ -475,7 +315,12 @@ namespace Erlin.Lib.Database.MsSql
             return result;
         }
 
-        private static void AddParamToCommand(SqlCommand command, List<SqlParam>? prms)
+        /// <summary>
+        /// Add SQL parameter to command object
+        /// </summary>
+        /// <param name="command">SQL command object</param>
+        /// <param name="prms">SQL parameter to add</param>
+        private static void AddParamToCommand(SqlCommand command, List<SqlParam>? prms = null)
         {
             if (prms != null)
             {
@@ -506,6 +351,11 @@ namespace Erlin.Lib.Database.MsSql
             }
         }
 
+        /// <summary>
+        /// Converts unified sql db type to MS-SQL Db type
+        /// </summary>
+        /// <param name="unitedType">Unified db type</param>
+        /// <returns>MS-SQL Db type</returns>
         private static SqlDbType ConvertDatabaseType(SqlParamType unitedType)
         {
             switch (unitedType)
@@ -518,15 +368,6 @@ namespace Erlin.Lib.Database.MsSql
                     return SqlDbType.VarChar;
                 default:
                     throw new EnumValueNotImplementedException(unitedType);
-            }
-        }
-
-        private static void CheckText(string objName, string text)
-        {
-            string lower = text.ToLower();
-            if (lower.Contains("ps_bydate"))
-            {
-                Console.WriteLine($"{objName}");
             }
         }
     }

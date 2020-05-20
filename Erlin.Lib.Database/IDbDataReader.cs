@@ -86,6 +86,7 @@ namespace Erlin.Lib.Database
         /// <param name="fieldName">FieldName</param>
         /// <returns>Readed value</returns>
         bool? ReadBoolN(string fieldName);
+
         /// <summary>
         /// Reads value from db result
         /// </summary>

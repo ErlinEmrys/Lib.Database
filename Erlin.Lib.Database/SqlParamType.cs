@@ -7,7 +7,7 @@ namespace Erlin.Lib.Database
     /// <summary>
     /// United type of database types
     /// </summary>
-    public enum SqlParamType : int
+    public enum SqlParamType
     {
         /// <summary>
         /// Error

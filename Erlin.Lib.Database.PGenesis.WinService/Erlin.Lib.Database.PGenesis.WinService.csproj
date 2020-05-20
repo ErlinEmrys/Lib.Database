@@ -7,7 +7,6 @@
     <IncludeSymbols>true</IncludeSymbols>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>bin\</OutputPath>
-    <UseWindowsForms>true</UseWindowsForms>
     <Authors>Erlin Emrys</Authors>
     <Copyright>©Erlin Emrys</Copyright>
   </PropertyGroup>

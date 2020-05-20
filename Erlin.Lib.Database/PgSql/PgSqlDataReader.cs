@@ -1,6 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Data;
+using System.Collections.Generic;
 using System.Text;
 
 using Npgsql;
@@ -41,7 +41,7 @@ namespace Erlin.Lib.Database.PgSql
         /// <typeparam name="T">Runtime type of record</typeparam>
         /// <returns>Readed record or null</returns>
         public T? Read<T>()
-            where T : class, IDbReadable, new()
+            where T : class?, IDbReadable, new()
         {
             T? item = null;
             if (UnderlyingReader.Read())
@@ -242,6 +242,7 @@ namespace Erlin.Lib.Database.PgSql
             {
                 throw new NullReferenceException(fieldName);
             }
+
             return readed.Value;
         }
 

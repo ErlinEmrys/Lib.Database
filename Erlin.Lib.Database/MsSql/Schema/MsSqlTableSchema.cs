@@ -63,9 +63,10 @@ namespace Erlin.Lib.Database.MsSql.Schema
 
                 result.AppendLine($"    [{fParam.ParamName}] [{fParam.ParamType}]{typeLength} {notNull}NULL,");
             }
-            result.AppendLine($") ON [PRIMARY]");
-            result.AppendLine($"GO");
-            result.AppendLine($"");
+
+            result.AppendLine(") ON [PRIMARY]");
+            result.AppendLine("GO");
+            result.AppendLine("");
         }
     }
 }

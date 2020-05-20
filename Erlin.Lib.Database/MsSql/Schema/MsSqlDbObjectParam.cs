@@ -34,6 +34,7 @@ JOIN sys.schemas d WITH(NOLOCK) ON b.[uid] = d.[schema_id] AND d.name != 'sys'
 LEFT JOIN sys.tables t ON b.id = t.object_id
 ORDER BY [{nameof(SchemaName)}], [{nameof(ObjectName)}], [{nameof(ParamName)}]
 ";
+
         /// <summary>
         /// Name of database parameter
         /// </summary>
@@ -74,7 +75,7 @@ ORDER BY [{nameof(SchemaName)}], [{nameof(ObjectName)}], [{nameof(ParamName)}]
         /// </summary>
         public MsSqlDbObjectParam()
         {
-            ParamName  = IDeSerializable.DUMMY_STRING;
+            ParamName = IDeSerializable.DUMMY_STRING;
         }
 
         /// <summary>
@@ -85,13 +86,13 @@ ORDER BY [{nameof(SchemaName)}], [{nameof(ObjectName)}], [{nameof(ParamName)}]
         {
             base.DbRead(reader);
 
-            ParamName     = reader.ReadString(nameof(ParamName));
-            ParamType      = SimpleConvert.Convert<SqlDbType>(reader.ReadString(nameof(ParamType)));
-            TypeLength    = reader.ReadInt16(nameof(TypeLength));
+            ParamName = reader.ReadString(nameof(ParamName));
+            ParamType = SimpleConvert.Convert<SqlDbType>(reader.ReadString(nameof(ParamType)));
+            TypeLength = reader.ReadInt16(nameof(TypeLength));
             TypePrecision = reader.ReadByte(nameof(TypePrecision));
-            IsNullable    = SimpleConvert.Convert<bool>(reader.ReadInt32(nameof(IsNullable)));
-            OrderId       = reader.ReadInt16(nameof(OrderId));
-            Collation     = reader.ReadStringN(nameof(Collation));
+            IsNullable = SimpleConvert.Convert<bool>(reader.ReadInt32(nameof(IsNullable)));
+            OrderId = reader.ReadInt16(nameof(OrderId));
+            Collation = reader.ReadStringN(nameof(Collation));
         }
     }
 }

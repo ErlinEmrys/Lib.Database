@@ -2,14 +2,9 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
-using System.Text;
-using System.Threading;
 
 using Erlin.Lib.Common;
 using Erlin.Lib.Common.Exceptions;
-using Erlin.Lib.Common.Time;
-using Erlin.Lib.Database.PgSql.Schema;
-using Erlin.Lib.Database.Schema;
 
 using Npgsql;
 
@@ -40,13 +35,12 @@ namespace Erlin.Lib.Database.PgSql
         /// </summary>
         public const string CHANNEL_GENESIS_DELETE = "genesis_delete";
 
-        private readonly NpgsqlConnectionStringBuilder _connectionString;
         private NpgsqlTransaction? _transaction;
 
         /// <summary>
         /// Default query timeout
         /// </summary>
-        public int DefaultTimeout { get; private set; } = 30 * 1000;
+        public int DefaultTimeout { get; set; } = 30 * 1000;
 
         /// <summary>
         /// Underlying connection object
@@ -59,23 +53,7 @@ namespace Erlin.Lib.Database.PgSql
         /// <param name="connectionString">PgSql connection string</param>
         public PgSqlDbConnect(string connectionString)
         {
-            _connectionString = new NpgsqlConnectionStringBuilder(connectionString);
-            if (string.IsNullOrEmpty(_connectionString.Host))
-            {
-                throw new InvalidOperationException($"Connection string {_connectionString} does not contains Host!");
-            }
-            if (string.IsNullOrEmpty(_connectionString.Database))
-            {
-                throw new InvalidOperationException($"Connection string {_connectionString} does not contains Database!");
-            }
-
             UnderlyingConnection = new NpgsqlConnection(connectionString);
-        }
-
-        /// <summary>Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.</summary>
-        public void Dispose()
-        {
-            UnderlyingConnection.Dispose();
         }
 
         /// <summary>
@@ -140,6 +118,78 @@ namespace Erlin.Lib.Database.PgSql
         }
 
         /// <summary>
+        /// Returns dataset from SQL query
+        /// </summary>
+        /// <param name="query">SQL query</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Dataset</returns>
+        public DataSet GetDataSet(string query, List<SqlParam>? prms = null)
+        {
+            return GetDataSetImpl(query, CommandType.Text, prms);
+        }
+
+        /// <summary>
+        /// Returns dataset from SQL stored procedure
+        /// </summary>
+        /// <param name="sp">SQL stored procedure</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Dataset</returns>
+        public DataSet GetDataSetSp(string sp, List<SqlParam>? prms = null)
+        {
+            return GetDataSetImpl(sp, CommandType.StoredProcedure, prms);
+        }
+
+        /// <summary>
+        /// Returns reader from SQL query
+        /// </summary>
+        /// <param name="query">SQL query</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Reader</returns>
+        IDbDataReader IDbConnect.GetDataReader(string query, List<SqlParam>? prms)
+        {
+            return GetDataReader(query, prms);
+        }
+
+        /// <summary>
+        /// Returns reader from SQL stored procedure
+        /// </summary>
+        /// <param name="sp">SQL stored procedure</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>reader</returns>
+        IDbDataReader IDbConnect.GetDataReaderSp(string sp, List<SqlParam>? prms)
+        {
+            return GetDataReaderSp(sp, prms);
+        }
+
+        /// <summary>
+        /// Executes SQL command without return value
+        /// </summary>
+        /// <param name="query">SQL query</param>
+        /// <param name="prms">SQL parameters</param>
+        public void Execute(string query, List<SqlParam>? prms = null)
+        {
+            ExecuteImpl<object>(query, CommandType.Text, prms);
+        }
+
+        /// <summary>
+        /// Executes SQL stored procedure without return value
+        /// </summary>
+        /// <param name="sp">SQL stored procedure</param>
+        /// <param name="prms">SQL parameters</param>
+        public void ExecuteSp(string sp, List<SqlParam>? prms = null)
+        {
+            ExecuteImpl<object>(sp, CommandType.StoredProcedure, prms);
+        }
+
+        /// <summary>
+        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
+        /// </summary>
+        public void Dispose()
+        {
+            UnderlyingConnection.Dispose();
+        }
+
+        /// <summary>
         /// Read complete database schema
         /// </summary>
         /// <returns>Parsed database schema</returns>
@@ -149,19 +199,20 @@ namespace Erlin.Lib.Database.PgSql
             string? filePath = null;
 
             UnderlyingConnection.Notification += delegate(object o, NpgsqlNotificationEventArgs args)
-                                        {
-                                            try
-                                            {
-                                                if (args.Channel == CHANNEL_GENESIS_RESPOND)
-                                                {
-                                                    filePath = args.Payload;
-                                                }
-                                            }
-                                            catch (Exception ex)
-                                            {
-                                                Log.Error(ex);
-                                            }
-                                        };
+                                                 {
+                                                     try
+                                                     {
+                                                         if (args.Channel == CHANNEL_GENESIS_RESPOND)
+                                                         {
+                                                             filePath = args.Payload;
+                                                         }
+                                                     }
+                                                     catch (Exception ex)
+                                                     {
+                                                         Log.Error(ex);
+                                                     }
+                                                 };
+
             //Request the creation of file
             ExecuteSp(SMP_GENESIS_REQUEST, new List<SqlParam> { new SqlParam("command", 0, SqlParamType.Int32), new SqlParam("token", token, SqlParamType.NVarchar) });
             if (!UnderlyingConnection.Wait(DefaultTimeout))
@@ -185,17 +236,13 @@ namespace Erlin.Lib.Database.PgSql
         }
 
         /// <summary>
-        /// Returns dataset from SQL query
+        /// Returns dataset
         /// </summary>
-        /// <param name="query">SQL query</param>
+        /// <param name="commandText">Command text</param>
+        /// <param name="commandType">Command type</param>
         /// <param name="prms">SQL parameters</param>
         /// <returns>Dataset</returns>
-        public DataSet GetDataSetQuery(string query, List<SqlParam> prms)
-        {
-            return GetDataSetImpl(query, CommandType.Text, prms);
-        }
-
-        private DataSet GetDataSetImpl(string commandText, CommandType commandType, List<SqlParam>? prms)
+        private DataSet GetDataSetImpl(string commandText, CommandType commandType, List<SqlParam>? prms = null)
         {
             DataSet result = new DataSet();
             result.Locale = CultureInfo.InvariantCulture;
@@ -210,11 +257,11 @@ namespace Erlin.Lib.Database.PgSql
         }
 
         /// <summary>
-        /// Returns reader from SQL stored procedure
+        /// Returns reader from SQL query
         /// </summary>
-        /// <param name="query">SQL stored procedure</param>
+        /// <param name="query">SQL query</param>
         /// <param name="prms">SQL parameters</param>
-        /// <returns>reader</returns>
+        /// <returns>Reader</returns>
         public PgSqlDataReader GetDataReader(string query, List<SqlParam>? prms = null)
         {
             return GetDataReaderImpl(query, CommandType.Text, prms);
@@ -231,27 +278,23 @@ namespace Erlin.Lib.Database.PgSql
             return GetDataReaderImpl(sp, CommandType.StoredProcedure, prms);
         }
 
-        private PgSqlDataReader GetDataReaderImpl(string commandText, CommandType commandType, List<SqlParam>? prms)
+        /// <summary>
+        /// Returns reader from SQL command
+        /// </summary>
+        /// <param name="commandText">Command text</param>
+        /// <param name="commandType">Command type</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Reader</returns>
+        private PgSqlDataReader GetDataReaderImpl(string commandText, CommandType commandType, List<SqlParam>? prms = null)
         {
             NpgsqlCommand command = CreateSqlCommand(commandText, commandType, prms);
             return new PgSqlDataReader(command.ExecuteReader());
         }
 
         /// <summary>
-        /// Returns dataset from SQL stored procedure
+        /// Executes SQL command with simple return value
         /// </summary>
-        /// <param name="query">SQL stored procedure</param>
-        /// <param name="prms">SQL parameters</param>
-        /// <returns>Dataset</returns>
-        public void Execute(string query, List<SqlParam>? prms = null)
-        {
-            ExecuteImpl<object>(query, CommandType.Text, prms);
-        }
-
-        /// <summary>
-        /// Returns dataset from SQL stored procedure
-        /// </summary>
-        /// <param name="query">SQL stored procedure</param>
+        /// <param name="query">SQL query</param>
         /// <param name="prms">SQL parameters</param>
         /// <returns>Dataset</returns>
         public T Execute<T>(string query, List<SqlParam>? prms = null)
@@ -260,18 +303,7 @@ namespace Erlin.Lib.Database.PgSql
         }
 
         /// <summary>
-        /// Returns dataset from SQL stored procedure
-        /// </summary>
-        /// <param name="sp">SQL stored procedure</param>
-        /// <param name="prms">SQL parameters</param>
-        /// <returns>Dataset</returns>
-        public void ExecuteSp(string sp, List<SqlParam>? prms = null)
-        {
-            ExecuteImpl<object>(sp, CommandType.StoredProcedure, prms);
-        }
-
-        /// <summary>
-        /// Returns dataset from SQL stored procedure
+        /// Executes SQL stored procedure with return value
         /// </summary>
         /// <param name="sp">SQL stored procedure</param>
         /// <param name="prms">SQL parameters</param>
@@ -281,7 +313,15 @@ namespace Erlin.Lib.Database.PgSql
             return ExecuteImpl<T>(sp, CommandType.StoredProcedure, prms);
         }
 
-        private T ExecuteImpl<T>(string commandText, CommandType commandType, List<SqlParam>? prms)
+        /// <summary>
+        /// Executes SQL command with return value
+        /// </summary>
+        /// <typeparam name="T">Runtime type of expected result</typeparam>
+        /// <param name="commandText">Command text</param>
+        /// <param name="commandType">Command type</param>
+        /// <param name="prms">SQL arguments</param>
+        /// <returns>Result value</returns>
+        private T ExecuteImpl<T>(string commandText, CommandType commandType, List<SqlParam>? prms = null)
         {
             NpgsqlCommand command = CreateSqlCommand(commandText, commandType, prms);
             return (T)command.ExecuteScalar();
@@ -295,7 +335,7 @@ namespace Erlin.Lib.Database.PgSql
         /// <param name="prms">Command parameters</param>
         /// <param name="commandTimeOut">Command timeout</param>
         /// <returns>Sql command</returns>
-        private NpgsqlCommand CreateSqlCommand(string commandText, CommandType commandType, List<SqlParam>? prms, int? commandTimeOut = null)
+        private NpgsqlCommand CreateSqlCommand(string commandText, CommandType commandType, List<SqlParam>? prms = null, int? commandTimeOut = null)
         {
             NpgsqlCommand result = new NpgsqlCommand();
             result.Connection = UnderlyingConnection;
@@ -314,7 +354,12 @@ namespace Erlin.Lib.Database.PgSql
             return result;
         }
 
-        private static void AddParamToCommand(NpgsqlCommand command, List<SqlParam>? prms)
+        /// <summary>
+        /// Add SQL parameter to command object
+        /// </summary>
+        /// <param name="command">SQL command object</param>
+        /// <param name="prms">SQL parameter to add</param>
+        private static void AddParamToCommand(NpgsqlCommand command, List<SqlParam>? prms = null)
         {
             if (prms != null)
             {
@@ -345,6 +390,11 @@ namespace Erlin.Lib.Database.PgSql
             }
         }
 
+        /// <summary>
+        /// Converts unified sql db type to PostgreSql Db type
+        /// </summary>
+        /// <param name="unitedType">Unified db type</param>
+        /// <returns>PostgreSql Db type</returns>
         private static NpgsqlDbType ConvertDatabaseType(SqlParamType unitedType)
         {
             switch (unitedType)

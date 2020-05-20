@@ -1,18 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Reflection;
-
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 using Erlin.Lib.Common;
 using Erlin.Lib.Common.Logging;
 using Erlin.Lib.Common.Reflection;
 
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Erlin.Lib.Database.PGenesis.WinService
 {
@@ -64,7 +61,7 @@ namespace Erlin.Lib.Database.PGenesis.WinService
         {
             return Host.CreateDefaultBuilder(args)
                        .UseWindowsService()
-                       .ConfigureAppConfiguration(builder=> builder.SetBasePath(AssemblyHelper.BaseLocation))
+                       .ConfigureAppConfiguration(builder => builder.SetBasePath(AssemblyHelper.BaseLocation))
                        .ConfigureServices((hostContext, services) => services.AddHostedService<PGenesisWorker>());
         }
     }

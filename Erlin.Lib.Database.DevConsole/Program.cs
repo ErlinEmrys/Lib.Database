@@ -3,7 +3,9 @@ using System.Diagnostics;
 using System.IO;
 
 using Erlin.Lib.Common;
+using Erlin.Lib.Common.FileSystem;
 using Erlin.Lib.Common.Logging;
+using Erlin.Lib.Database.PgSql;
 
 using Microsoft.Extensions.Configuration;
 
@@ -33,7 +35,7 @@ namespace Erlin.Lib.Database.DevConsole
             {
                 Log.LogSystem = new LogMultiplier(new FileLog(TraceLevel.Verbose), new ConsoleLog());
 
-                var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+                string? environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
                 IConfigurationRoot config = new ConfigurationBuilder()
                                             .SetBasePath(Directory.GetParent(AppContext.BaseDirectory).FullName)
                                             .AddJsonFile("appsettings.json", true, true)
@@ -41,7 +43,12 @@ namespace Erlin.Lib.Database.DevConsole
                                             .Build();
 
                 string connString = config.GetConnectionString("drdWebDb");
-                DbSchemaGenerator.ReGenerate(connString, @Path.Combine(AppContext.BaseDirectory, "output.sql"));
+                using (PgSqlDbConnect connect = new PgSqlDbConnect(connString))
+                {
+                    connect.Open();
+
+                    FileHelper.WriteAllBytes(Path.Combine(AppContext.BaseDirectory, "output.sql"), connect.ReadSchema());
+                }
             }
             finally
             {

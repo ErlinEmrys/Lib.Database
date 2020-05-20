@@ -65,40 +65,40 @@ namespace Erlin.Lib.Database.PGenesis.WinService
             Log.Info("PGenesisWorker.Execute!");
 
             await ParallelHelper.Run(() =>
-                               {
-                                   string defaultDbName = _config["PgDefaultDb"];
-                                   Log.Info($"Default DB name: {defaultDbName}");
-                                   string connString = GetConnectionString(defaultDbName);
-                                   List<string> databases = new List<string>();
+                                     {
+                                         string defaultDbName = _config["PgDefaultDb"];
+                                         Log.Info($"Default DB name: {defaultDbName}");
+                                         string connString = GetConnectionString(defaultDbName);
+                                         List<string> databases = new List<string>();
 
-                                   using (PgSqlDbConnect connect = new PgSqlDbConnect(connString))
-                                   {
-                                       connect.Open();
-                                       using (PgSqlDataReader reader = connect.GetDataReader("SELECT datname FROM pg_database WHERE datistemplate = false AND datname != 'postgres';"))
-                                       {
-                                           while (reader.UnderlyingReader.Read())
-                                           {
-                                               databases.Add(reader.ReadString("datname"));
-                                           }
-                                       }
-                                   }
+                                         using (PgSqlDbConnect connect = new PgSqlDbConnect(connString))
+                                         {
+                                             connect.Open();
+                                             using (PgSqlDataReader reader = connect.GetDataReader("SELECT datname FROM pg_database WHERE datistemplate = false AND datname != 'postgres';"))
+                                             {
+                                                 while (reader.UnderlyingReader.Read())
+                                                 {
+                                                     databases.Add(reader.ReadString("datname"));
+                                                 }
+                                             }
+                                         }
 
-                                   List<Task> allTasks = new List<Task>();
-                                   foreach (string fDbName in databases)
-                                   {
-                                       PGenesisListener fListener = new PGenesisListener(_config, fDbName, GetConnectionString(fDbName));
-                                       Task fTask = fListener.ListenDb(cancellationToken);
-                                       allTasks.Add(fTask);
-                                   }
+                                         List<Task> allTasks = new List<Task>();
+                                         foreach (string fDbName in databases)
+                                         {
+                                             PGenesisListener fListener = new PGenesisListener(_config, fDbName, GetConnectionString(fDbName));
+                                             Task fTask = fListener.ListenDb(cancellationToken);
+                                             allTasks.Add(fTask);
+                                         }
 
 
-                                   while (!cancellationToken.IsCancellationRequested)
-                                   {
-                                       Task.WaitAll(allTasks.ToArray(), 100);
-                                   }
+                                         while (!cancellationToken.IsCancellationRequested)
+                                         {
+                                             Task.WaitAll(allTasks.ToArray(), 100);
+                                         }
 
-                                   Log.Info("PGenesisWorker.Execute finished!");
-                               });
+                                         Log.Info("PGenesisWorker.Execute finished!");
+                                     });
         }
 
         /// <summary>
