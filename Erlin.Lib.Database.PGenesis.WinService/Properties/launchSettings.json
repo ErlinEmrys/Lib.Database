@@ -1,0 +1,10 @@
+﻿{
+  "profiles": {
+    "Erlin.Lib.Database.PGenesis.WinService": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

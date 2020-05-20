@@ -3,25 +3,25 @@ using System.Data;
 using System.Collections.Generic;
 using System.Text;
 
-using Microsoft.Data.SqlClient;
+using Npgsql;
 
-namespace Erlin.Lib.Database.MsSql
+namespace Erlin.Lib.Database.PgSql
 {
     /// <summary>
-    /// MS SQL data reader
+    /// Postgresql data reader
     /// </summary>
-    public class MsSqlDataReader : IDbDataReader
+    public class PgSqlDataReader : IDbDataReader
     {
         /// <summary>
         /// Underlying db reader
         /// </summary>
-        public SqlDataReader UnderlyingReader { get; }
+        public NpgsqlDataReader UnderlyingReader { get; }
 
         /// <summary>
         /// Ctor
         /// </summary>
         /// <param name="underlyingReader">Underlying db reader</param>
-        public MsSqlDataReader(SqlDataReader underlyingReader)
+        public PgSqlDataReader(NpgsqlDataReader underlyingReader)
         {
             UnderlyingReader = underlyingReader;
         }

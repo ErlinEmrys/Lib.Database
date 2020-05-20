@@ -27,18 +27,6 @@ namespace Erlin.Lib.Database.Schema
         public abstract DbObjectType ObjectType { get; }
 
         /// <summary>
-        /// (De)Serialize this object
-        /// </summary>
-        /// <param name="rw">Reader/writer</param>
-        public abstract void DeSerialize(IObjectReadWriter rw);
-
-        /// <summary>
-        /// Returns full database name/identifier
-        /// </summary>
-        /// <returns></returns>
-        public abstract string GetFullName();
-
-        /// <summary>
         /// Ctor
         /// </summary>
         /// <param name="name">Name of the object</param>
@@ -54,6 +42,18 @@ namespace Erlin.Lib.Database.Schema
         {
             Name = IDeSerializable.DUMMY_STRING;
         }
+
+        /// <summary>
+        /// (De)Serialize this object
+        /// </summary>
+        /// <param name="rw">Reader/writer</param>
+        public abstract void DeSerialize(IObjectReadWriter rw);
+
+        /// <summary>
+        /// Returns full database name/identifier
+        /// </summary>
+        /// <returns></returns>
+        public abstract string GetFullName();
 
         /// <summary>
         /// Compare collection of SbSchema objects to another collection of same type

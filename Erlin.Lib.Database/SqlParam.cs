@@ -36,7 +36,7 @@ namespace Erlin.Lib.Database
         /// <summary>
         /// Manually selected data-type of the parameter
         /// </summary>
-        public SqlDbType? SqlType { get; private set; }
+        public SqlParamType SqlType { get; private set; }
 
         /// <summary>
         /// Size of value type
@@ -56,7 +56,7 @@ namespace Erlin.Lib.Database
         /// <param name="direction">Direction of the parameter</param>
         /// <param name="sqlType">Sql type of the parametr</param>
         /// <param name="size">Size of the sql type</param>
-        public SqlParam(string name, object value, SqlDbType? sqlType = null, int? size = null, ParameterDirection direction = ParameterDirection.Input)
+        public SqlParam(string name, object value, SqlParamType sqlType, int? size = null, ParameterDirection direction = ParameterDirection.Input)
         {
             if (string.IsNullOrEmpty(name))
             {

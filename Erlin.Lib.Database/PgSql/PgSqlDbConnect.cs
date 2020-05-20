@@ -5,44 +5,55 @@ using System.Globalization;
 
 using Erlin.Lib.Common;
 using Erlin.Lib.Common.Exceptions;
-using Erlin.Lib.Database.MsSql.Schema;
 
-using Microsoft.Data.SqlClient;
+using Npgsql;
 
-namespace Erlin.Lib.Database.MsSql
+using NpgsqlTypes;
+
+namespace Erlin.Lib.Database.PgSql
 {
     /// <summary>
-    /// Microsoft SQL database connection object
+    /// PostgreSql DB connection
     /// </summary>
-    public sealed class MsSqlDbConnect : IDbConnect
+    public sealed class PgSqlDbConnect : IDbConnect
     {
-        private readonly SqlConnection _connection;
-        private readonly string _connectionString;
-        private SqlTransaction? _transaction;
+        private const string SMP_GENESIS_REQUEST = "spm_genesis_request";
+        private const string SMP_READ_FILE = "spm_read_file_utf8";
+
+        /// <summary>
+        /// Channel name for pgenesis requests
+        /// </summary>
+        public const string CHANNEL_GENESIS_REQUEST = "genesis_request";
+
+        /// <summary>
+        /// Channel name for pgenesis respond
+        /// </summary>
+        public const string CHANNEL_GENESIS_RESPOND = "genesis_respond";
+
+        /// <summary>
+        /// Channel name for pgenesis delete
+        /// </summary>
+        public const string CHANNEL_GENESIS_DELETE = "genesis_delete";
+
+        private NpgsqlTransaction? _transaction;
+
+        /// <summary>
+        /// Default query timeout
+        /// </summary>
+        public int DefaultTimeout { get; set; } = 30 * 1000;
+
+        /// <summary>
+        /// Underlying connection object
+        /// </summary>
+        public NpgsqlConnection UnderlyingConnection { get; }
 
         /// <summary>
         /// Ctor
         /// </summary>
-        /// <param name="connection">Existing connection object</param>
-        public MsSqlDbConnect(SqlConnection connection)
+        /// <param name="connectionString">PgSql connection string</param>
+        public PgSqlDbConnect(string connectionString)
         {
-            _connection = connection;
-            _connectionString = _connection.ConnectionString;
-        }
-
-        /// <summary>
-        /// Ctor
-        /// </summary>
-        /// <param name="connectionString">MS-SQL connection string</param>
-        public MsSqlDbConnect(string connectionString)
-        {
-            if (string.IsNullOrEmpty(connectionString))
-            {
-                throw new ArgumentNullException(nameof(connectionString));
-            }
-
-            _connection = new SqlConnection(connectionString);
-            _connectionString = connectionString;
+            UnderlyingConnection = new NpgsqlConnection(connectionString);
         }
 
         /// <summary>
@@ -50,10 +61,7 @@ namespace Erlin.Lib.Database.MsSql
         /// </summary>
         public void Open()
         {
-            if (_connection.State == ConnectionState.Closed)
-            {
-                _connection.Open();
-            }
+            UnderlyingConnection.Open();
         }
 
         /// <summary>
@@ -61,10 +69,7 @@ namespace Erlin.Lib.Database.MsSql
         /// </summary>
         public void Close()
         {
-            if (_connection.State != ConnectionState.Closed)
-            {
-                _connection.Close();
-            }
+            UnderlyingConnection.Close();
         }
 
         /// <summary>
@@ -78,7 +83,7 @@ namespace Erlin.Lib.Database.MsSql
                 throw new InvalidOperationException("Cannot begin another database transaction - transaction in progress!");
             }
 
-            _transaction = _connection.BeginTransaction();
+            _transaction = UnderlyingConnection.BeginTransaction();
             return _transaction;
         }
 
@@ -135,26 +140,6 @@ namespace Erlin.Lib.Database.MsSql
         }
 
         /// <summary>
-        /// Executes SQL command without return value
-        /// </summary>
-        /// <param name="query">SQL query</param>
-        /// <param name="prms">SQL parameters</param>
-        public void Execute(string query, List<SqlParam>? prms = null)
-        {
-            ExecuteImpl<object>(query, CommandType.Text, prms);
-        }
-
-        /// <summary>
-        /// Executes SQL stored procedure without return value
-        /// </summary>
-        /// <param name="sp">SQL stored procedure</param>
-        /// <param name="prms">SQL parameters</param>
-        public void ExecuteSp(string sp, List<SqlParam>? prms = null)
-        {
-            ExecuteImpl<object>(sp, CommandType.StoredProcedure, prms);
-        }
-
-        /// <summary>
         /// Returns reader from SQL query
         /// </summary>
         /// <param name="query">SQL query</param>
@@ -177,23 +162,77 @@ namespace Erlin.Lib.Database.MsSql
         }
 
         /// <summary>
+        /// Executes SQL command without return value
+        /// </summary>
+        /// <param name="query">SQL query</param>
+        /// <param name="prms">SQL parameters</param>
+        public void Execute(string query, List<SqlParam>? prms = null)
+        {
+            ExecuteImpl<object>(query, CommandType.Text, prms);
+        }
+
+        /// <summary>
+        /// Executes SQL stored procedure without return value
+        /// </summary>
+        /// <param name="sp">SQL stored procedure</param>
+        /// <param name="prms">SQL parameters</param>
+        public void ExecuteSp(string sp, List<SqlParam>? prms = null)
+        {
+            ExecuteImpl<object>(sp, CommandType.StoredProcedure, prms);
+        }
+
+        /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
         /// </summary>
         public void Dispose()
         {
-            _connection.Dispose();
+            UnderlyingConnection.Dispose();
         }
 
         /// <summary>
         /// Read complete database schema
         /// </summary>
         /// <returns>Parsed database schema</returns>
-        public MsSqlDbSchema ReadSchema()
+        public byte[] ReadSchema()
         {
-            SqlConnectionStringBuilder connStringBuilder = new SqlConnectionStringBuilder(_connectionString);
-            MsSqlDbSchema result = new MsSqlDbSchema(connStringBuilder.DataSource, connStringBuilder.InitialCatalog);
-            result.ReadSchema(this);
-            return result;
+            string token = $"{Guid.NewGuid()}";
+            string? filePath = null;
+
+            UnderlyingConnection.Notification += delegate(object o, NpgsqlNotificationEventArgs args)
+                                                 {
+                                                     try
+                                                     {
+                                                         if (args.Channel == CHANNEL_GENESIS_RESPOND)
+                                                         {
+                                                             filePath = args.Payload;
+                                                         }
+                                                     }
+                                                     catch (Exception ex)
+                                                     {
+                                                         Log.Error(ex);
+                                                     }
+                                                 };
+
+            //Request the creation of file
+            ExecuteSp(SMP_GENESIS_REQUEST, new List<SqlParam> { new SqlParam("command", 0, SqlParamType.Int32), new SqlParam("token", token, SqlParamType.NVarchar) });
+            if (!UnderlyingConnection.Wait(DefaultTimeout))
+            {
+                throw new TimeoutException("CHANNEL_GENESIS_RESPOND");
+            }
+
+            if (string.IsNullOrEmpty(filePath))
+            {
+                throw new TimeoutException("FILE_PATH_EMPTY");
+            }
+
+            //Read the file
+            byte[] data = ExecuteSp<byte[]>(SMP_READ_FILE, new List<SqlParam> { new SqlParam("path", filePath, SqlParamType.NVarchar) });
+
+            //Delete the file
+            ExecuteSp(SMP_GENESIS_REQUEST,
+                      new List<SqlParam> { new SqlParam("command", 1, SqlParamType.Int32), new SqlParam("token", filePath, SqlParamType.NVarchar) });
+
+            return data;
         }
 
         /// <summary>
@@ -208,13 +247,48 @@ namespace Erlin.Lib.Database.MsSql
             DataSet result = new DataSet();
             result.Locale = CultureInfo.InvariantCulture;
 
-            using (SqlDataAdapter da = new SqlDataAdapter())
+            using (NpgsqlDataAdapter da = new NpgsqlDataAdapter())
             {
                 da.SelectCommand = CreateSqlCommand(commandText, commandType, prms);
                 da.Fill(result);
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Returns reader from SQL query
+        /// </summary>
+        /// <param name="query">SQL query</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Reader</returns>
+        public PgSqlDataReader GetDataReader(string query, List<SqlParam>? prms = null)
+        {
+            return GetDataReaderImpl(query, CommandType.Text, prms);
+        }
+
+        /// <summary>
+        /// Returns reader from SQL stored procedure
+        /// </summary>
+        /// <param name="sp">SQL stored procedure</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>reader</returns>
+        public PgSqlDataReader GetDataReaderSp(string sp, List<SqlParam>? prms = null)
+        {
+            return GetDataReaderImpl(sp, CommandType.StoredProcedure, prms);
+        }
+
+        /// <summary>
+        /// Returns reader from SQL command
+        /// </summary>
+        /// <param name="commandText">Command text</param>
+        /// <param name="commandType">Command type</param>
+        /// <param name="prms">SQL parameters</param>
+        /// <returns>Reader</returns>
+        private PgSqlDataReader GetDataReaderImpl(string commandText, CommandType commandType, List<SqlParam>? prms = null)
+        {
+            NpgsqlCommand command = CreateSqlCommand(commandText, commandType, prms);
+            return new PgSqlDataReader(command.ExecuteReader());
         }
 
         /// <summary>
@@ -249,43 +323,8 @@ namespace Erlin.Lib.Database.MsSql
         /// <returns>Result value</returns>
         private T ExecuteImpl<T>(string commandText, CommandType commandType, List<SqlParam>? prms = null)
         {
-            SqlCommand command = CreateSqlCommand(commandText, commandType, prms);
+            NpgsqlCommand command = CreateSqlCommand(commandText, commandType, prms);
             return (T)command.ExecuteScalar();
-        }
-
-        /// <summary>
-        /// Returns reader from SQL query
-        /// </summary>
-        /// <param name="query">SQL query</param>
-        /// <param name="prms">SQL parameters</param>
-        /// <returns>Reader</returns>
-        public MsSqlDataReader GetDataReader(string query, List<SqlParam>? prms = null)
-        {
-            return GetDataReaderImpl(query, CommandType.Text, prms);
-        }
-
-        /// <summary>
-        /// Returns reader from SQL stored procedure
-        /// </summary>
-        /// <param name="sp">SQL stored procedure</param>
-        /// <param name="prms">SQL parameters</param>
-        /// <returns>reader</returns>
-        public MsSqlDataReader GetDataReaderSp(string sp, List<SqlParam>? prms = null)
-        {
-            return GetDataReaderImpl(sp, CommandType.StoredProcedure, prms);
-        }
-
-        /// <summary>
-        /// Returns data reader from SQL command
-        /// </summary>
-        /// <param name="commandText">Command text</param>
-        /// <param name="commandType">Command type</param>
-        /// <param name="prms">SQL parameters</param>
-        /// <returns>Result data reader</returns>
-        private MsSqlDataReader GetDataReaderImpl(string commandText, CommandType commandType, List<SqlParam>? prms = null)
-        {
-            SqlCommand command = CreateSqlCommand(commandText, commandType, prms);
-            return new MsSqlDataReader(command.ExecuteReader());
         }
 
         /// <summary>
@@ -296,10 +335,10 @@ namespace Erlin.Lib.Database.MsSql
         /// <param name="prms">Command parameters</param>
         /// <param name="commandTimeOut">Command timeout</param>
         /// <returns>Sql command</returns>
-        private SqlCommand CreateSqlCommand(string commandText, CommandType commandType, List<SqlParam>? prms = null, int? commandTimeOut = null)
+        private NpgsqlCommand CreateSqlCommand(string commandText, CommandType commandType, List<SqlParam>? prms = null, int? commandTimeOut = null)
         {
-            SqlCommand result = new SqlCommand();
-            result.Connection = _connection;
+            NpgsqlCommand result = new NpgsqlCommand();
+            result.Connection = UnderlyingConnection;
             result.Transaction = _transaction;
             result.CommandTimeout = IDbConnect.DEFAULT_COMMAND_TIMEOUT_SECONDS;
             if (commandTimeOut.HasValue)
@@ -320,14 +359,14 @@ namespace Erlin.Lib.Database.MsSql
         /// </summary>
         /// <param name="command">SQL command object</param>
         /// <param name="prms">SQL parameter to add</param>
-        private static void AddParamToCommand(SqlCommand command, List<SqlParam>? prms = null)
+        private static void AddParamToCommand(NpgsqlCommand command, List<SqlParam>? prms = null)
         {
             if (prms != null)
             {
                 foreach (SqlParam fParam in prms)
                 {
                     object value = SimpleConvert.ConvertNullToDbNull(fParam.Value);
-                    SqlParameter newpar = command.Parameters.AddWithValue(fParam.SqlName, value);
+                    NpgsqlParameter newpar = command.Parameters.AddWithValue(fParam.SqlName, value);
                     if (fParam.Direction != ParameterDirection.Input)
                     {
                         newpar.Direction = fParam.Direction;
@@ -341,7 +380,7 @@ namespace Erlin.Lib.Database.MsSql
                         fParam.SqlParameter = newpar;
                     }
 
-                    newpar.SqlDbType = ConvertDatabaseType(fParam.SqlType);
+                    newpar.NpgsqlDbType = ConvertDatabaseType(fParam.SqlType);
 
                     if (fParam.Size.HasValue)
                     {
@@ -352,20 +391,19 @@ namespace Erlin.Lib.Database.MsSql
         }
 
         /// <summary>
-        /// Converts unified sql db type to MS-SQL Db type
+        /// Converts unified sql db type to PostgreSql Db type
         /// </summary>
         /// <param name="unitedType">Unified db type</param>
-        /// <returns>MS-SQL Db type</returns>
-        private static SqlDbType ConvertDatabaseType(SqlParamType unitedType)
+        /// <returns>PostgreSql Db type</returns>
+        private static NpgsqlDbType ConvertDatabaseType(SqlParamType unitedType)
         {
             switch (unitedType)
             {
                 case SqlParamType.Int32:
-                    return SqlDbType.Int;
+                    return NpgsqlDbType.Integer;
                 case SqlParamType.NVarchar:
-                    return SqlDbType.NVarChar;
                 case SqlParamType.Varchar:
-                    return SqlDbType.VarChar;
+                    return NpgsqlDbType.Varchar;
                 default:
                     throw new EnumValueNotImplementedException(unitedType);
             }

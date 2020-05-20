@@ -7,6 +7,10 @@
 *.user
 *.sln.docstates
 
+# Secrets
+appsettings.Development.json
+appsettings.Production.json
+
 # Build results
 [Bb]in/
 [Oo]bj/
