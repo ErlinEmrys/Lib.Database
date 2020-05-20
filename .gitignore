@@ -11,6 +11,12 @@
 [Bb]in/
 [Oo]bj/
 
+# Secrets
+secrets.*json
+appsettings.Development.json
+appsettings.Production.json
+*.pubxml
+
 # Roslyn cache directories
 *.ide/
 
