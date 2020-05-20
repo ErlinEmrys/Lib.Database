@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 
 using Erlin.Lib.Common;
 using Erlin.Lib.Common.FileSystem;
+using Erlin.Lib.Common.Threading;
 using Erlin.Lib.Database.PgSql;
 
 using Microsoft.Extensions.Configuration;
@@ -46,34 +47,36 @@ namespace Erlin.Lib.Database.PGenesis.WinService
         /// <returns></returns>
         public async Task ListenDb(CancellationToken stoppingToken)
         {
-            Log.Info($"Listening started for DB: {_dbName}");
+            await ParallelHelper.Run(() =>
+                                     {
+                                         Log.Info($"Listening started for DB: {_dbName}");
 
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                try
-                {
-                    using (PgSqlDbConnect connect = new PgSqlDbConnect(_connectionString))
-                    {
-                        connect.Open();
+                                         while (!stoppingToken.IsCancellationRequested)
+                                         {
+                                             try
+                                             {
+                                                 using (PgSqlDbConnect connect = new PgSqlDbConnect(_connectionString))
+                                                 {
+                                                     connect.Open();
 
-                        connect.UnderlyingConnection.Notification += OnNotification;
+                                                     connect.UnderlyingConnection.Notification += OnNotification;
 
-                        connect.Execute($"LISTEN {PgSqlDbConnect.CHANNEL_GENESIS_REQUEST};");
-                        connect.Execute($"LISTEN {PgSqlDbConnect.CHANNEL_GENESIS_DELETE};");
+                                                     connect.Execute($"LISTEN {PgSqlDbConnect.CHANNEL_GENESIS_REQUEST};");
+                                                     connect.Execute($"LISTEN {PgSqlDbConnect.CHANNEL_GENESIS_DELETE};");
 
-                        while (!stoppingToken.IsCancellationRequested && connect.UnderlyingConnection.State == ConnectionState.Open)
-                        {
-                            await connect.UnderlyingConnection.WaitAsync(stoppingToken);
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    Log.Error(e);
-                }
-
-                await Task.Delay(1000, stoppingToken);
-            }
+                                                     while (!stoppingToken.IsCancellationRequested && connect.UnderlyingConnection.State == ConnectionState.Open)
+                                                     {
+                                                         connect.UnderlyingConnection.Wait(100);
+                                                     }
+                                                 }
+                                             }
+                                             catch (Exception e)
+                                             {
+                                                 Log.Error(e);
+                                                 Thread.Sleep(1000);
+                                             }
+                                         }
+                                     });
         }
 
         /// <summary>

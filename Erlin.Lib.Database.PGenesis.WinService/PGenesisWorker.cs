@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Erlin.Lib.Common;
+using Erlin.Lib.Common.Threading;
 using Erlin.Lib.Database.PgSql;
 
 using Microsoft.Extensions.Configuration;
@@ -57,40 +58,47 @@ namespace Erlin.Lib.Database.PGenesis.WinService
         /// <summary>
         /// Execution of a service
         /// </summary>
-        /// <param name="stoppingToken">Cancellation</param>
+        /// <param name="cancellationToken">Cancellation</param>
         /// <returns></returns>
-        protected override Task ExecuteAsync(CancellationToken stoppingToken)
+        protected override async Task ExecuteAsync(CancellationToken cancellationToken)
         {
             Log.Info("PGenesisWorker.Execute!");
 
-            string connString = GetConnectionString(_config["PgDefaultDb"]);
-            List<string> databases = new List<string>();
+            await ParallelHelper.Run(() =>
+                               {
+                                   string defaultDbName = _config["PgDefaultDb"];
+                                   Log.Info($"Default DB name: {defaultDbName}");
+                                   string connString = GetConnectionString(defaultDbName);
+                                   List<string> databases = new List<string>();
 
-            using (PgSqlDbConnect connect = new PgSqlDbConnect(connString))
-            {
-                connect.Open();
-                using (PgSqlDataReader reader = connect.GetDataReader("SELECT datname FROM pg_database WHERE datistemplate = false AND datname != 'postgres';"))
-                {
-                    while (reader.UnderlyingReader.Read())
-                    {
-                        databases.Add(reader.ReadString("datname"));
-                    }
-                }
-            }
+                                   using (PgSqlDbConnect connect = new PgSqlDbConnect(connString))
+                                   {
+                                       connect.Open();
+                                       using (PgSqlDataReader reader = connect.GetDataReader("SELECT datname FROM pg_database WHERE datistemplate = false AND datname != 'postgres';"))
+                                       {
+                                           while (reader.UnderlyingReader.Read())
+                                           {
+                                               databases.Add(reader.ReadString("datname"));
+                                           }
+                                       }
+                                   }
 
-            List<Task> allTasks = new List<Task>();
-            foreach (string fDbName in databases)
-            {
-                PGenesisListener fListener = new PGenesisListener(_config, fDbName, GetConnectionString(fDbName));
-                Task fTask = fListener.ListenDb(stoppingToken);
-                allTasks.Add(fTask);
-            }
+                                   List<Task> allTasks = new List<Task>();
+                                   foreach (string fDbName in databases)
+                                   {
+                                       PGenesisListener fListener = new PGenesisListener(_config, fDbName, GetConnectionString(fDbName));
+                                       Task fTask = fListener.ListenDb(cancellationToken);
+                                       allTasks.Add(fTask);
+                                   }
 
-            Task.WaitAll(allTasks.ToArray(), stoppingToken);
 
-            Log.Info("PGenesisWorker.Execute finished!");
+                                   while (!cancellationToken.IsCancellationRequested)
+                                   {
+                                       Task.WaitAll(allTasks.ToArray(), 100);
+                                   }
 
-            return Task.CompletedTask;
+                                   Log.Info("PGenesisWorker.Execute finished!");
+                               });
         }
 
         /// <summary>
