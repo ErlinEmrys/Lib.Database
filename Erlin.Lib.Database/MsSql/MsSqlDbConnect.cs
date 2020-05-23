@@ -360,12 +360,26 @@ namespace Erlin.Lib.Database.MsSql
         {
             switch (unitedType)
             {
+                case SqlParamType.Decimal:
+                    return SqlDbType.Decimal;
+                case SqlParamType.Int16:
+                    return SqlDbType.SmallInt;
                 case SqlParamType.Int32:
                     return SqlDbType.Int;
-                case SqlParamType.NVarchar:
+                case SqlParamType.Int64:
+                    return SqlDbType.BigInt;
+                case SqlParamType.StringUtf8:
                     return SqlDbType.NVarChar;
-                case SqlParamType.Varchar:
+                case SqlParamType.StringAnsi:
                     return SqlDbType.VarChar;
+                case SqlParamType.DateTime:
+                    return SqlDbType.DateTime;
+                case SqlParamType.Date:
+                    return SqlDbType.Date;
+                case SqlParamType.Time:
+                    return SqlDbType.Time;
+                case SqlParamType.Bool:
+                    return SqlDbType.Bit;
                 default:
                     throw new EnumValueNotImplementedException(unitedType);
             }

@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Erlin.Lib.Common;
 using Erlin.Lib.Common.FileSystem;
 using Erlin.Lib.Common.Threading;
+using Erlin.Lib.Common.Time;
 using Erlin.Lib.Database.PgSql;
 
 using Microsoft.Extensions.Configuration;
@@ -63,6 +64,7 @@ namespace Erlin.Lib.Database.PGenesis.WinService
 
                                                      connect.Execute($"LISTEN {PgSqlDbConnect.CHANNEL_GENESIS_REQUEST};");
                                                      connect.Execute($"LISTEN {PgSqlDbConnect.CHANNEL_GENESIS_DELETE};");
+                                                     connect.Execute($"LISTEN {PgSqlDbConnect.CHANNEL_BACKUP_REQUEST};");
 
                                                      while (!stoppingToken.IsCancellationRequested && connect.UnderlyingConnection.State == ConnectionState.Open)
                                                      {
@@ -91,17 +93,17 @@ namespace Erlin.Lib.Database.PGenesis.WinService
                 switch (args.Channel)
                 {
                     case PgSqlDbConnect.CHANNEL_GENESIS_REQUEST:
-
+                    {
                         if (string.IsNullOrEmpty(args.Payload))
                         {
                             throw new ArgumentException("Payload is empty");
                         }
 
-                        string filePath = Path.Combine(_config["OutputDir"], args.Payload + ".sql");
+                        string filePath = Path.Combine(_config["GenesisOutputDir"], args.Payload + ".sql");
                         FileHelper.DirectoryEnsure(filePath);
 
                         string exePath = _config["PgDumpPath"];
-                        string argsText = $"{_config["PgDumpArgs"]} --file=\"{filePath}\" {_dbName}";
+                        string argsText = $"{_config["GenesisArgs"]} --file=\"{filePath}\" {_dbName}";
 
                         Log.Info($"RUN {exePath} {argsText}");
                         Process pgsql = Process.Start(exePath, argsText);
@@ -114,9 +116,24 @@ namespace Erlin.Lib.Database.PGenesis.WinService
                         }
 
                         break;
+                    }
                     case PgSqlDbConnect.CHANNEL_GENESIS_DELETE:
+                    {
                         File.Delete(args.Payload);
                         break;
+                    }
+                    case PgSqlDbConnect.CHANNEL_BACKUP_REQUEST:
+                    {
+                        string exePath = _config["PgDumpAllPath"];
+                        string filePath = Path.Combine(_config["BackupOutputDir"],
+                                                       _config["BackupFilePrefix"] + DateTimeHelper.Now.ToString(DateTimeHelper.FORMAT_FULL).Replace(".", "_").Replace(":", "_").Replace(" ", "_") + ".pgbak");
+                        string argsText = $"{_config["BackupArgs"]} --file=\"{filePath}\"";
+
+                        Log.Info($"RUN {exePath} {argsText}");
+                        Process pgsql = Process.Start(exePath, argsText);
+                        pgsql?.WaitForExit();
+                        break;
+                    }
                 }
             }
             catch (Exception ex)

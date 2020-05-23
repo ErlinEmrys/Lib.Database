@@ -17,8 +17,8 @@ namespace Erlin.Lib.Database.PgSql
     /// </summary>
     public sealed class PgSqlDbConnect : IDbConnect
     {
-        private const string SMP_GENESIS_REQUEST = "spm_genesis_request";
-        private const string SMP_READ_FILE = "spm_read_file_utf8";
+        private const string SPM_GENESIS_REQUEST = "spm_genesis_request";
+        private const string SPM_READ_FILE = "spm_read_file_utf8";
 
         /// <summary>
         /// Channel name for pgenesis requests
@@ -34,6 +34,11 @@ namespace Erlin.Lib.Database.PgSql
         /// Channel name for pgenesis delete
         /// </summary>
         public const string CHANNEL_GENESIS_DELETE = "genesis_delete";
+
+        /// <summary>
+        /// Channel name for pgenesis backup requests
+        /// </summary>
+        public const string CHANNEL_BACKUP_REQUEST = "backup_request";
 
         private NpgsqlTransaction? _transaction;
 
@@ -198,23 +203,25 @@ namespace Erlin.Lib.Database.PgSql
             string token = $"{Guid.NewGuid()}";
             string? filePath = null;
 
-            UnderlyingConnection.Notification += delegate(object o, NpgsqlNotificationEventArgs args)
-                                                 {
-                                                     try
-                                                     {
-                                                         if (args.Channel == CHANNEL_GENESIS_RESPOND)
-                                                         {
-                                                             filePath = args.Payload;
-                                                         }
-                                                     }
-                                                     catch (Exception ex)
-                                                     {
-                                                         Log.Error(ex);
-                                                     }
-                                                 };
+            void OnUnderlyingConnectionOnNotification(object o, NpgsqlNotificationEventArgs args)
+            {
+                try
+                {
+                    if (args.Channel == CHANNEL_GENESIS_RESPOND)
+                    {
+                        filePath = args.Payload;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex);
+                }
+            }
+
+            UnderlyingConnection.Notification += OnUnderlyingConnectionOnNotification;
 
             //Request the creation of file
-            ExecuteSp(SMP_GENESIS_REQUEST, new List<SqlParam> { new SqlParam("command", 0, SqlParamType.Int32), new SqlParam("token", token, SqlParamType.NVarchar) });
+            ExecuteSp(SPM_GENESIS_REQUEST, new List<SqlParam> { new SqlParam("command", 0, SqlParamType.Int32), new SqlParam("token", token, SqlParamType.StringUtf8) });
             if (!UnderlyingConnection.Wait(DefaultTimeout))
             {
                 throw new TimeoutException("CHANNEL_GENESIS_RESPOND");
@@ -226,11 +233,13 @@ namespace Erlin.Lib.Database.PgSql
             }
 
             //Read the file
-            byte[] data = ExecuteSp<byte[]>(SMP_READ_FILE, new List<SqlParam> { new SqlParam("path", filePath, SqlParamType.NVarchar) });
+            byte[] data = ExecuteSp<byte[]>(SPM_READ_FILE, new List<SqlParam> { new SqlParam("path", filePath, SqlParamType.StringUtf8) });
 
             //Delete the file
-            ExecuteSp(SMP_GENESIS_REQUEST,
-                      new List<SqlParam> { new SqlParam("command", 1, SqlParamType.Int32), new SqlParam("token", filePath, SqlParamType.NVarchar) });
+            ExecuteSp(SPM_GENESIS_REQUEST,
+                      new List<SqlParam> { new SqlParam("command", 1, SqlParamType.Int32), new SqlParam("token", filePath, SqlParamType.StringUtf8) });
+
+            UnderlyingConnection.Notification -= OnUnderlyingConnectionOnNotification;
 
             return data;
         }
@@ -399,11 +408,25 @@ namespace Erlin.Lib.Database.PgSql
         {
             switch (unitedType)
             {
+                case SqlParamType.Decimal:
+                    return NpgsqlDbType.Double;
+                case SqlParamType.Int16:
+                    return NpgsqlDbType.Smallint;
                 case SqlParamType.Int32:
                     return NpgsqlDbType.Integer;
-                case SqlParamType.NVarchar:
-                case SqlParamType.Varchar:
+                case SqlParamType.Int64:
+                    return NpgsqlDbType.Bigint;
+                case SqlParamType.StringUtf8:
+                case SqlParamType.StringAnsi:
                     return NpgsqlDbType.Varchar;
+                case SqlParamType.DateTime:
+                    return NpgsqlDbType.Timestamp;
+                case SqlParamType.Date:
+                    return NpgsqlDbType.Date;
+                case SqlParamType.Time:
+                    return NpgsqlDbType.Time;
+                case SqlParamType.Bool:
+                    return NpgsqlDbType.Bit;
                 default:
                     throw new EnumValueNotImplementedException(unitedType);
             }
